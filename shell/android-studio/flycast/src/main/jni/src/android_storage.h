@@ -1,5 +1,6 @@
 /*
 	Copyright 2023 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -21,7 +22,9 @@
 #include "oslib/storage.h"
 #include "oslib/i18n.h"
 #include "jni_util.h"
+#include <cerrno>
 #include <jni.h>
+#include <unistd.h>
 
 namespace hostfs
 {
@@ -52,6 +55,7 @@ public:
 
 	FILE *openFile(const std::string& uri, const std::string& mode) override
 	{
+		NOTICE_LOG(COMMON, "AndroidStorage openFile begin: uri='%s' mode='%s'", uri.c_str(), mode.c_str());
 		jni::String juri(uri);
 		const char *amode;
 		if (mode.substr(0, 2) == "r+")
@@ -75,11 +79,25 @@ public:
 			WARN_LOG(COMMON, "openFile failed: %s", e.what());
 			return nullptr;
 		}
-		return fdopen(fd, mode.c_str());
+		if (fd < 0)
+		{
+			WARN_LOG(COMMON, "openFile failed: invalid fd for uri='%s' mode='%s'", uri.c_str(), mode.c_str());
+			return nullptr;
+		}
+		FILE *file = fdopen(fd, mode.c_str());
+		if (!file)
+		{
+			WARN_LOG(COMMON, "openFile failed: fdopen failed for uri='%s' mode='%s' errno=%d", uri.c_str(), mode.c_str(), errno);
+			::close(fd);
+			return nullptr;
+		}
+		NOTICE_LOG(COMMON, "AndroidStorage openFile success: uri='%s' mode='%s' fd=%d", uri.c_str(), mode.c_str(), fd);
+		return file;
 	}
 
 	std::vector<FileInfo> listContent(const std::string& uri) override
 	{
+		NOTICE_LOG(COMMON, "AndroidStorage listContent begin: uri='%s'", uri.c_str());
 		std::vector<FileInfo> ret;
 		if (uri.empty())
 			// Nothing to see here
@@ -95,43 +113,58 @@ public:
 			jni::Object fileInfo = fileInfos[i];
 			ret.emplace_back(fromJavaFileInfo(fileInfo));
 		}
+		NOTICE_LOG(COMMON, "AndroidStorage listContent success: uri='%s' entries=%d", uri.c_str(), len);
 
 		return ret;
 	}
 
 	std::string getParentPath(const std::string& uri) override
 	{
+		NOTICE_LOG(COMMON, "AndroidStorage getParentPath begin: uri='%s'", uri.c_str());
 		jni::String juri(uri);
 		jni::String jparentUri(jni::env()->CallObjectMethod(jstorage, jgetParentUri, (jstring)juri));
 		checkException();
-		return jparentUri;
+		std::string parent = jparentUri;
+		NOTICE_LOG(COMMON, "AndroidStorage getParentPath success: uri='%s' parent='%s'", uri.c_str(), parent.c_str());
+		return parent;
 	}
 
 	std::string getSubPath(const std::string& reference, const std::string& relative) override
 	{
+		NOTICE_LOG(COMMON, "AndroidStorage getSubPath begin: reference='%s' relative='%s'", reference.c_str(), relative.c_str());
 		jni::String jref(reference);
 		jni::String jrel(relative);
 		jni::String jretUri(jni::env()->CallObjectMethod(jstorage, jgetSubPath, (jstring)jref, (jstring)jrel));
 		checkException();
-		return jretUri;
+		std::string result = jretUri;
+		NOTICE_LOG(COMMON, "AndroidStorage getSubPath success: reference='%s' relative='%s' result='%s'",
+			reference.c_str(), relative.c_str(), result.c_str());
+		return result;
 	}
 
 	FileInfo getFileInfo(const std::string& uri) override
 	{
+		NOTICE_LOG(COMMON, "AndroidStorage getFileInfo begin: uri='%s'", uri.c_str());
 		jni::String juri(uri);
 		jni::Object jinfo(jni::env()->CallObjectMethod(jstorage, jgetFileInfo, (jstring)juri));
 		checkException();
-		return fromJavaFileInfo(jinfo);
+		FileInfo info = fromJavaFileInfo(jinfo);
+		NOTICE_LOG(COMMON, "AndroidStorage getFileInfo success: uri='%s' name='%s' isDirectory=%d size=%llu writable=%d",
+			uri.c_str(), info.name.c_str(), info.isDirectory ? 1 : 0, (unsigned long long)info.size, info.isWritable ? 1 : 0);
+		return info;
 	}
 
 	bool exists(const std::string& uri) override
 	{
+		NOTICE_LOG(COMMON, "AndroidStorage exists begin: uri='%s'", uri.c_str());
 		jni::String juri(uri);
 		bool ret = jni::env()->CallBooleanMethod(jstorage, jexists, (jstring)juri);
 		try {
 			checkException();
+			NOTICE_LOG(COMMON, "AndroidStorage exists success: uri='%s' exists=%d", uri.c_str(), ret ? 1 : 0);
 			return ret;
 		} catch (...) {
+			WARN_LOG(COMMON, "AndroidStorage exists failed: uri='%s'", uri.c_str());
 			return false;
 		}
 	}

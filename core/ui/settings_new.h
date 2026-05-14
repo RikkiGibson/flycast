@@ -1,5 +1,6 @@
 /*
-	Copyright 2019 flyinghead
+	Copyright 2024 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -30,6 +31,7 @@ enum class SettingsTab
 	Controls,
 	Network,
 	Advanced,
+	ChdSystem,
 	About,
 	Count  // Sentinel value for iteration
 };
@@ -60,6 +62,7 @@ void renderAudioTab();
 void renderControlsTab();
 void renderNetworkTab();
 void renderAdvancedTab();
+void renderChdSystemTab();
 void renderAboutTab();
 void focusBoxArtSection();
 void openTab(SettingsTab tab);

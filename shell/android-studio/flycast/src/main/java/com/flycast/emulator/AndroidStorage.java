@@ -1,5 +1,6 @@
 /*
 	Copyright 2023 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -100,8 +101,87 @@ public class AndroidStorage {
         }
     }
 
+    private String getDocumentName(String uriString)
+    {
+        Uri uri = Uri.parse(uriString);
+        try {
+            String documentId = DocumentsContract.isDocumentUri(activity, uri)
+                    ? DocumentsContract.getDocumentId(uri)
+                    : DocumentsContract.getTreeDocumentId(uri);
+            int slash = documentId.lastIndexOf('/');
+            return slash >= 0 ? documentId.substring(slash + 1) : documentId;
+        } catch (IllegalArgumentException ignored) {
+        }
+
+        String lastPath = uri.getLastPathSegment();
+        if (lastPath == null || lastPath.isEmpty())
+            return "output.chd";
+        int slash = lastPath.lastIndexOf('/');
+        return slash >= 0 ? lastPath.substring(slash + 1) : lastPath;
+    }
+
+    private Uri ensureDocumentForWrite(Uri uri) throws FileNotFoundException
+    {
+        String parentUriString = getParentUri(uri.toString());
+        if (parentUriString.isEmpty())
+            throw new FileNotFoundException(uri.toString());
+
+        Uri parentUri = Uri.parse(parentUriString);
+        String documentId = DocumentsContract.isDocumentUri(activity, parentUri)
+                ? DocumentsContract.getDocumentId(parentUri)
+                : DocumentsContract.getTreeDocumentId(parentUri);
+        Uri docUri = DocumentsContract.buildDocumentUriUsingTree(parentUri, documentId);
+        Uri created = DocumentsContract.createDocument(activity.getContentResolver(), docUri,
+                "application/octet-stream", getDocumentName(uri.toString()));
+        if (created == null)
+            throw new FileNotFoundException(uri.toString());
+        return created;
+    }
+
+    private static boolean isWriteMode(String mode)
+    {
+        return mode.indexOf('w') >= 0 || mode.indexOf('a') >= 0;
+    }
+
     public int openFile(String uri, String mode) throws FileNotFoundException {
-        ParcelFileDescriptor pfd = activity.getContentResolver().openFileDescriptor(Uri.parse(uri), mode);
+        Uri parsedUri = Uri.parse(uri);
+        ParcelFileDescriptor pfd;
+        Exception initialError = null;
+        try {
+            pfd = activity.getContentResolver().openFileDescriptor(parsedUri, mode);
+        } catch (Exception e) {
+            if (!isWriteMode(mode)) {
+                if (e instanceof FileNotFoundException)
+                    throw (FileNotFoundException)e;
+                Log.w("Flycast", "openFileDescriptor failed for " + uri + " mode=" + mode, e);
+                FileNotFoundException wrapped = new FileNotFoundException(uri);
+                wrapped.initCause(e);
+                throw wrapped;
+            }
+            initialError = e;
+            try {
+                parsedUri = ensureDocumentForWrite(parsedUri);
+            } catch (Exception createError) {
+                Log.w("Flycast", "openFileDescriptor failed for " + uri + " mode=" + mode, initialError);
+                Log.w("Flycast", "createDocument failed for " + uri + " mode=" + mode, createError);
+                FileNotFoundException wrapped = new FileNotFoundException(uri);
+                wrapped.initCause(createError);
+                wrapped.addSuppressed(initialError);
+                throw wrapped;
+            }
+            try {
+                pfd = activity.getContentResolver().openFileDescriptor(parsedUri, mode);
+            } catch (Exception retryError) {
+                Log.w("Flycast", "openFileDescriptor failed for " + uri + " mode=" + mode, initialError);
+                Log.w("Flycast", "openFileDescriptor retry failed for " + parsedUri + " mode=" + mode, retryError);
+                FileNotFoundException wrapped = new FileNotFoundException(uri);
+                wrapped.initCause(retryError);
+                wrapped.addSuppressed(initialError);
+                throw wrapped;
+            }
+        }
+        if (pfd == null)
+            throw new FileNotFoundException(uri);
         return pfd.detachFd();
     }
 
@@ -183,10 +263,10 @@ public class AndroidStorage {
                 List<String> comps = path.getPath();
                 if (comps.size() > 1)
                     return DocumentsContract.buildDocumentUriUsingTree(uri, comps.get(comps.size() - 2)).toString();
-            } catch (IllegalArgumentException e) {
+            } catch (Exception e) {
                 // Happens for root storage uri:
                 // DocumentsContract: Failed to find path: Invalid URI: content://com.android.externalstorage.documents/tree/primary%3AFlycast
-                return "";
+                Log.w("Flycast", "getParentUri failed for " + uriString, e);
             }
         }
         // Hack the uri manually

@@ -1,3 +1,8 @@
+#
+#	Copyright 2024 flyinghead
+#	Portions Copyright 2026 The Hollycast Authors
+#
+
 if(NOT LIBRETRO)
     target_sources(${PROJECT_NAME} PRIVATE
             game_scanner.cpp
@@ -25,6 +30,7 @@ if(NOT LIBRETRO)
             settings_network.cpp
             settings_video.cpp
             settings_new.cpp
+            settings_chd.cpp
             settings_new.h
             video_preset.cpp
             video_preset.h

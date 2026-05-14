@@ -1,5 +1,6 @@
 /*
-	Copyright 2019 flyinghead
+	Copyright 2024 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -229,6 +230,8 @@ static const char* GetTabHelpText(SettingsTab tab)
 		return "Online play, server, match code, and link features. Highlight or select a setting for connection details and recommendations.";
 	case SettingsTab::Advanced:
 		return "Power-user options, debugging, underclocking, overlays, and developer tools. Highlight or select a setting for deeper explanations.";
+	case SettingsTab::ChdSystem:
+		return "ROM management, CHD conversion workflows, compression profiles, queueing, and benchmark planning.";
 	case SettingsTab::About:
 		return "Project information, links, license details, and credits.";
 	case SettingsTab::Count:
@@ -1734,6 +1737,8 @@ const char* getTabName(SettingsTab tab)
 		return "Network";
 	case SettingsTab::Advanced:
 		return "Advanced";
+	case SettingsTab::ChdSystem:
+		return "CHD System";
 	case SettingsTab::About:
 		return "About";
 	default:
@@ -1819,6 +1824,9 @@ static void renderContentArea()
 		break;
 	case SettingsTab::Advanced:
 		renderAdvancedTab();
+		break;
+	case SettingsTab::ChdSystem:
+		renderChdSystemTab();
 		break;
 	case SettingsTab::About:
 		renderAboutTab();

@@ -1,20 +1,21 @@
 /*
-	Copyright 2019 flyinghead
+	Copyright 2024 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
-	This file is part of reicast.
+	This file is part of Flycast.
 
-    reicast is free software: you can redistribute it and/or modify
+    Flycast is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
     the Free Software Foundation, either version 2 of the License, or
     (at your option) any later version.
 
-    reicast is distributed in the hope that it will be useful,
+    Flycast is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
 
     You should have received a copy of the GNU General Public License
-    along with reicast.  If not, see <https://www.gnu.org/licenses/>.
+    along with Flycast.  If not, see <https://www.gnu.org/licenses/>.
  */
 #include "gui_util.h"
 #include <string>
@@ -121,7 +122,7 @@ void select_file_popup(const char *prompt, const StringCallback& callback,
 						std::string extension = get_file_extension(entry.name);
 						if (selectFile)
 						{
-							if (extension == selectExtension)
+							if (selectExtension.empty() || extension == selectExtension)
 								folderFiles.push_back(entry);
 						}
 						else if (extension == "zip" || extension == "7z" || extension == "chd"

@@ -1,5 +1,6 @@
 /*
-	Copyright 2019 flyinghead
+	Copyright 2024 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -229,9 +230,11 @@ void renderToolsMenu()
 {
 	if (ImGui::BeginMenu("Tools"))
 	{
-		ImGui::MenuItem("CHD Convert", nullptr, false, false);
-		if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-			ImGui::SetTooltip("CHD conversion is not available yet.");
+		if (ImGui::MenuItem("CHD System", nullptr, false, true))
+		{
+			gui_prepare_settings_tab(GuiSettingsTab::ChdSystem);
+			gui_setState(GuiState::Settings);
+		}
 
 		// Custom Boxart
 		if (ImGui::MenuItem("Custom Boxart", nullptr, false, true))

@@ -1963,6 +1963,7 @@ void gui_cycleSaveStateSlot(int step)
 
 void gui_setState(GuiState newState)
 {
+	NOTICE_LOG(COMMON, "GUI state change: %d -> %d", (int)gui_state, (int)newState);
 	gui_state = newState;
 	if (newState == GuiState::Closed)
 	{
