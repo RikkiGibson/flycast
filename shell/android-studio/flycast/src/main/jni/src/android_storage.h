@@ -53,7 +53,7 @@ public:
 		return path.substr(0, 10) == "content://";
 	}
 
-	FILE *openFile(const std::string& uri, const std::string& mode) override
+	File *openFile(const std::string& uri, const std::string& mode) override
 	{
 		NOTICE_LOG(COMMON, "AndroidStorage openFile begin: uri='%s' mode='%s'", uri.c_str(), mode.c_str());
 		jni::String juri(uri);
@@ -92,7 +92,7 @@ public:
 			return nullptr;
 		}
 		NOTICE_LOG(COMMON, "AndroidStorage openFile success: uri='%s' mode='%s' fd=%d", uri.c_str(), mode.c_str(), fd);
-		return file;
+		return new StdFile(file);
 	}
 
 	std::vector<FileInfo> listContent(const std::string& uri) override
@@ -278,7 +278,7 @@ private:
 	void (*addStorageCallback)(bool cancelled, std::string selectedPath);
 };
 
-Storage& customStorage()
+CustomStorage& customStorage()
 {
 	static std::unique_ptr<AndroidStorage> androidStorage;
 	if (!androidStorage)
@@ -316,8 +316,10 @@ extern "C" JNIEXPORT void JNICALL Java_com_flycast_emulator_AndroidStorage_reloa
 	if (config::open())
 	{
 		const RenderType render = config::RendererType;
+		config::Settings::instance().reset();
 		config::Settings::instance().load(false);
 		// Make sure the renderer type doesn't change mid-flight
 		config::RendererType = render;
+		config::Settings::instance().save();
 	}
 }
