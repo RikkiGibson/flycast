@@ -118,19 +118,19 @@ public:
 				continue;
 			}
 
-				if (!m_file || m_lastfile != m_info.track[tracknum].fname)
+			if (!m_file || m_lastfile != m_info.track[tracknum].fname)
+			{
+				m_file.reset();
+				m_lastfile = m_info.track[tracknum].fname;
+				NOTICE_LOG(COMMON, "CHD CD opening track file: track=%d path='%s'", tracknum, m_lastfile.c_str());
+				const std::error_condition openErr = util::core_file::open(m_lastfile, OPEN_FLAG_READ, m_file);
+				if (openErr)
 				{
-					m_file.reset();
-					m_lastfile = m_info.track[tracknum].fname;
-					NOTICE_LOG(COMMON, "CHD CD opening track file: track=%d path='%s'", tracknum, m_lastfile.c_str());
-					const std::error_condition openErr = util::core_file::open(m_lastfile, OPEN_FLAG_READ, m_file);
-					if (openErr)
-					{
-						ERROR_LOG(COMMON, "CHD CD track open failed: track=%d path='%s' message='%s'",
-							tracknum, m_lastfile.c_str(), openErr.message().c_str());
-						throw openErr;
-					}
+					ERROR_LOG(COMMON, "CHD CD track open failed: track=%d path='%s' message='%s'",
+						tracknum, m_lastfile.c_str(), openErr.message().c_str());
+					throw openErr;
 				}
+			}
 
 			const uint64_t bytesperframe = trackinfo.datasize + trackinfo.subsize;
 			const uint64_t src_track_start = m_info.track[tracknum].offset;
@@ -142,23 +142,23 @@ public:
 			while (length_remaining != 0 && offset < endoffs)
 			{
 				const uint64_t src_frame_start = src_track_start + ((offset - startoffs) / cdrom_file::FRAME_SIZE) * bytesperframe;
-					if (src_frame_start >= split_or_max
-						&& src_frame_start < src_track_end
-						&& (tracknum + 1) < m_toc.numtrks
-						&& m_lastfile != m_info.track[tracknum + 1].fname)
+				if (src_frame_start >= split_or_max
+					&& src_frame_start < src_track_end
+					&& (tracknum + 1) < m_toc.numtrks
+					&& m_lastfile != m_info.track[tracknum + 1].fname)
+				{
+					m_file.reset();
+					m_lastfile = m_info.track[tracknum + 1].fname;
+					NOTICE_LOG(COMMON, "CHD CD switching split track file: fromTrack=%d toTrack=%d path='%s'",
+						tracknum, tracknum + 1, m_lastfile.c_str());
+					const std::error_condition openErr = util::core_file::open(m_lastfile, OPEN_FLAG_READ, m_file);
+					if (openErr)
 					{
-						m_file.reset();
-						m_lastfile = m_info.track[tracknum + 1].fname;
-						NOTICE_LOG(COMMON, "CHD CD switching split track file: fromTrack=%d toTrack=%d path='%s'",
-							tracknum, tracknum + 1, m_lastfile.c_str());
-						const std::error_condition openErr = util::core_file::open(m_lastfile, OPEN_FLAG_READ, m_file);
-						if (openErr)
-						{
-							ERROR_LOG(COMMON, "CHD CD split track open failed: track=%d path='%s' message='%s'",
-								tracknum + 1, m_lastfile.c_str(), openErr.message().c_str());
-							throw openErr;
-						}
+						ERROR_LOG(COMMON, "CHD CD split track open failed: track=%d path='%s' message='%s'",
+							tracknum + 1, m_lastfile.c_str(), openErr.message().c_str());
+						throw openErr;
 					}
+				}
 
 				if (src_frame_start < src_track_end)
 				{
@@ -168,19 +168,19 @@ public:
 					}
 					else
 					{
-							const std::uint64_t seekTo = src_frame_start >= split_or_max ? src_frame_start - split_or_max : src_frame_start;
-							std::error_condition err = m_file->seek(seekTo, SEEK_SET);
-							std::size_t count = 0;
-							if (!err)
-								std::tie(err, count) = read(*m_file, dest, bytesperframe);
-							if (err || count != bytesperframe)
-							{
-								ERROR_LOG(COMMON, "CHD CD track read failed: track=%d file='%s' seek=%llu requested=%u actual=%u message='%s'",
-									tracknum, m_lastfile.c_str(), (unsigned long long)seekTo, (unsigned)bytesperframe, (unsigned)count,
-									err ? err.message().c_str() : "short read");
-								throw err ? err : std::make_error_condition(std::errc::io_error);
-							}
+						const std::uint64_t seekTo = src_frame_start >= split_or_max ? src_frame_start - split_or_max : src_frame_start;
+						std::error_condition err = m_file->seek(seekTo, SEEK_SET);
+						std::size_t count = 0;
+						if (!err)
+							std::tie(err, count) = read(*m_file, dest, bytesperframe);
+						if (err || count != bytesperframe)
+						{
+							ERROR_LOG(COMMON, "CHD CD track read failed: track=%d file='%s' seek=%llu requested=%u actual=%u message='%s'",
+								tracknum, m_lastfile.c_str(), (unsigned long long)seekTo, (unsigned)bytesperframe, (unsigned)count,
+								err ? err.message().c_str() : "short read");
+							throw err ? err : std::make_error_condition(std::errc::io_error);
 						}
+					}
 
 					if (m_info.track[tracknum].swap)
 					{
@@ -200,7 +200,7 @@ public:
 		return length - length_remaining;
 	}
 
-	private:
+private:
 	bool m_loggedFirstRead = false;
 	std::string m_lastfile;
 	util::core_file::ptr m_file;
@@ -409,9 +409,9 @@ bool runConversion(Mode mode, const std::string& inputPath, const std::string& o
 	{
 		NOTICE_LOG(COMMON, "CHD runConversion dispatch: mode=%s input='%s' output='%s'",
 			mode == Mode::CreateCd ? "cd" : "dvd", inputPath.c_str(), outputPath.c_str());
-			if (mode == Mode::CreateCd)
-				return runCdConversion(inputPath, outputPath, errorMessage, progressCallback);
-			return runDvdConversion(inputPath, outputPath, errorMessage, progressCallback);
+		if (mode == Mode::CreateCd)
+			return runCdConversion(inputPath, outputPath, errorMessage, progressCallback);
+		return runDvdConversion(inputPath, outputPath, errorMessage, progressCallback);
 	}
 	catch (const std::error_condition& e)
 	{

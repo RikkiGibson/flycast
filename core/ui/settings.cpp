@@ -1,5 +1,5 @@
 /*
-	Copyright 2024 flyinghead
+	Copyright 2025 flyinghead
 	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
@@ -19,7 +19,6 @@
  */
 #include "settings.h"
 #include "settings_new.h"
-#include "log/Log.h"
 
 namespace {
 
@@ -59,7 +58,6 @@ void gui_display_settings()
 
 void gui_prepare_settings_tab(GuiSettingsTab tab)
 {
-	NOTICE_LOG(COMMON, "Settings prepare tab: %d", (int)tab);
 	SettingsNew::openTab(toSettingsNewTab(tab));
 }
 

@@ -24,10 +24,6 @@ android {
         versionCode = 8
         versionName = gitVersionName()
         vectorDrawables.useSupportLibrary = true
-        ndk {
-            abiFilters += listOf("arm64-v8a")
-        }
-
         externalNativeBuild {
             cmake {
                 arguments += "-DANDROID_ARM_MODE=arm"
