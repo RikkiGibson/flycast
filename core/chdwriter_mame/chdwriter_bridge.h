@@ -29,7 +29,19 @@ enum class Mode
 	CreateDvd,
 };
 
+enum class CompressionProfile
+{
+	Fast,
+	Balanced,
+	HighCompression,
+	MaxArchive,
+};
+
+const char *describeCompressionProfile(CompressionProfile profile);
+const char *describeCompressionStack(Mode mode, CompressionProfile profile);
+
 bool runConversion(Mode mode, const std::string& inputPath, const std::string& outputPath, std::string& errorMessage,
-	const std::function<void(double complete, double ratio, const std::string& phase)>& progressCallback = {});
+	const std::function<void(double complete, double ratio, const std::string& phase)>& progressCallback = {},
+	CompressionProfile compressionProfile = CompressionProfile::Balanced);
 
 } // namespace chdwriter_mame

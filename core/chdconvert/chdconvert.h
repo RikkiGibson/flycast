@@ -33,6 +33,14 @@ enum class SourceKind
 	Directory,
 };
 
+enum class CompressionProfile
+{
+	Fast,
+	Balanced,
+	HighCompression,
+	MaxArchive,
+};
+
 struct SourceProbe
 {
 	std::string sourcePath;
@@ -56,6 +64,8 @@ struct ConversionPlan
 struct ConversionOptions
 {
 	std::string outputDirectory;
+	std::string outputFileSuffix;
+	CompressionProfile compressionProfile = CompressionProfile::Balanced;
 	std::function<void(double complete, double ratio, const std::string& phase)> progressCallback;
 };
 
@@ -75,5 +85,7 @@ ConversionResult runSingleConversion(const std::string& path, const ConversionOp
 std::vector<std::string> collectConvertibleSources(const std::string& path, bool scanSubdirectories);
 std::vector<std::string> collectSourceSetPaths(const std::string& path);
 const char *describeSourceKind(SourceKind kind);
+const char *describeCompressionProfile(CompressionProfile profile);
+const char *describeCompressionStack(SourceKind kind, CompressionProfile profile);
 
 } // namespace chdconvert

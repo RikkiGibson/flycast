@@ -1,5 +1,6 @@
 /*
 	Copyright 2023 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -19,7 +20,14 @@
 #pragma once
 #include "types.h"
 
+#include <cstdio>
 #include <vector>
+
+#ifdef _WIN32
+#include <io.h>
+#else
+#include <unistd.h>
+#endif
 
 namespace hostfs
 {
@@ -54,6 +62,8 @@ public:
 	virtual s64 size() = 0;
 	virtual int eof() = 0;
 	virtual int error() = 0;
+	virtual int flush() { return 0; }
+	virtual int truncate(s64 offset) { return -1; }
 };
 
 class StdFile : public File
@@ -83,12 +93,20 @@ public:
 
 	s64 tell() override
 	{
+#ifdef _WIN32
+		return _ftelli64(file);
+#else
 		return std::ftell(file);
+#endif
 	}
 
 	int seek(s64 offset, int whence) override
 	{
+#ifdef _WIN32
+		return _fseeki64(file, offset, whence);
+#else
 		return std::fseek(file, offset, whence);
+#endif
 	}
 
 	char* gets(char* str, int count) override
@@ -98,11 +116,10 @@ public:
 
 	s64 size() override
 	{
-		std::fpos_t position;
-		std::fgetpos(file, &position);
-		std::fseek(file, 0, SEEK_END);
+		s64 position = tell();
+		seek(0, SEEK_END);
 		s64 size = tell();
-		std::fsetpos(file, &position);
+		seek(position, SEEK_SET);
 		return size;
 	}
 
@@ -114,6 +131,20 @@ public:
 	int error() override
 	{
 		return std::ferror(file);
+	}
+
+	int flush() override
+	{
+		return std::fflush(file);
+	}
+
+	int truncate(s64 offset) override
+	{
+#ifdef _WIN32
+		return _chsize_s(_fileno(file), offset);
+#else
+		return ::ftruncate(::fileno(file), offset);
+#endif
 	}
 };
 

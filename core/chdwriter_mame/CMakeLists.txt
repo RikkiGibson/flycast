@@ -25,6 +25,7 @@ set(HOLLYCAST_CHDWRITER_SOURCES
 	upstream/lib_util/chdcodec.cpp
 	upstream/lib_util/corealloc.cpp
 	upstream/lib_util/corefile.cpp
+	upstream/lib_util/flac.cpp
 	upstream/lib_util/corestr.cpp
 	upstream/lib_util/hashing.cpp
 	upstream/lib_util/huffman.cpp
@@ -40,12 +41,30 @@ set(HOLLYCAST_CHDWRITER_SOURCES
 	upstream/thirdparty/utf8proc/utf8proc.c
 )
 
+if(NOT TARGET FLAC::FLAC)
+	set(BUILD_CXXLIBS OFF)
+	set(BUILD_PROGRAMS OFF)
+	set(BUILD_EXAMPLES OFF)
+	set(BUILD_TESTING OFF)
+	set(BUILD_DOCS OFF)
+	set(WITH_OGG OFF)
+	set(WITH_ASM OFF)
+	set(WITH_AVX OFF)
+	set(WITH_FORTIFY_SOURCE OFF)
+	set(WITH_STACK_PROTECTOR OFF)
+	set(INSTALL_MANPAGES OFF)
+	set(INSTALL_PKGCONFIG_MODULES OFF)
+	set(INSTALL_CMAKE_CONFIG_MODULE OFF)
+	set(ENABLE_MULTITHREADING OFF)
+	add_subdirectory(${CMAKE_SOURCE_DIR}/core/deps/flac ${CMAKE_BINARY_DIR}/core/deps/flac EXCLUDE_FROM_ALL)
+endif()
+
 target_sources(${PROJECT_NAME} PRIVATE ${HOLLYCAST_CHDWRITER_SOURCES})
+target_link_libraries(${PROJECT_NAME} PRIVATE FLAC::FLAC)
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE
 	CRLF=2
 	UTF8PROC_STATIC=1
-	HOLLYCAST_CHD_NO_FLAC=1
 	HOLLYCAST_CHD_NO_AVHUFF=1
 )
 

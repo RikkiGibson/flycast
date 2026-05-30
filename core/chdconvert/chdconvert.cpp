@@ -140,7 +140,28 @@ static bool isPreferredRootImage(const std::string& ext)
 static void addWriterNote(SourceProbe& probe)
 {
 	probe.notes.push_back("Internal CHD conversion backend mode is enabled for this pass.");
-	probe.notes.push_back("Balanced compression is enabled (CD: cdzl, DVD: zlib).");
+	probe.notes.push_back("Selectable compression profiles are available for this source.");
+}
+
+static chdwriter_mame::Mode writerModeForKind(SourceKind kind)
+{
+	return kind == SourceKind::Iso ? chdwriter_mame::Mode::CreateDvd : chdwriter_mame::Mode::CreateCd;
+}
+
+static chdwriter_mame::CompressionProfile writerCompressionProfile(CompressionProfile profile)
+{
+	switch (profile)
+	{
+	case CompressionProfile::Fast:
+		return chdwriter_mame::CompressionProfile::Fast;
+	case CompressionProfile::Balanced:
+		return chdwriter_mame::CompressionProfile::Balanced;
+	case CompressionProfile::HighCompression:
+		return chdwriter_mame::CompressionProfile::HighCompression;
+	case CompressionProfile::MaxArchive:
+		return chdwriter_mame::CompressionProfile::MaxArchive;
+	}
+	return chdwriter_mame::CompressionProfile::Balanced;
 }
 
 static std::string normalizeDirectoryPath(const std::string& path)
@@ -151,9 +172,10 @@ static std::string normalizeDirectoryPath(const std::string& path)
 	return normalized;
 }
 
-static bool resolveOutputPathForSource(const std::string& sourcePath, const std::string& outputDirectory, std::string& resolvedPath, std::string& errorMessage)
+static bool resolveOutputPathForSource(const std::string& sourcePath, const std::string& outputDirectory, const std::string& outputFileSuffix,
+	std::string& resolvedPath, std::string& errorMessage)
 {
-	const std::string baseName = get_file_basename(hostfs::storage().getFileInfo(sourcePath).name) + ".chd";
+	const std::string baseName = get_file_basename(hostfs::storage().getFileInfo(sourcePath).name) + outputFileSuffix + ".chd";
 	const std::string normalizedOutputDirectory = normalizeDirectoryPath(outputDirectory);
 	if (normalizedOutputDirectory.empty())
 	{
@@ -253,6 +275,16 @@ const char *describeSourceKind(SourceKind kind)
 	default:
 		return "Unknown";
 	}
+}
+
+const char *describeCompressionProfile(CompressionProfile profile)
+{
+	return chdwriter_mame::describeCompressionProfile(writerCompressionProfile(profile));
+}
+
+const char *describeCompressionStack(SourceKind kind, CompressionProfile profile)
+{
+	return chdwriter_mame::describeCompressionStack(writerModeForKind(kind), writerCompressionProfile(profile));
 }
 
 SourceProbe probeSource(const std::string& path)
@@ -371,7 +403,7 @@ ConversionResult runSingleConversion(const std::string& path, const ConversionOp
 		}
 
 		if (!resolveOutputPathForSource(plan.probe.primaryFile.empty() ? plan.probe.sourcePath : plan.probe.primaryFile,
-			options.outputDirectory, result.outputPath, result.message))
+			options.outputDirectory, options.outputFileSuffix, result.outputPath, result.message))
 		{
 			result.exitCode = -2;
 			WARN_LOG(COMMON, "CHD convert rejected: requested='%s' message='%s'",
@@ -381,19 +413,20 @@ ConversionResult runSingleConversion(const std::string& path, const ConversionOp
 		NOTICE_LOG(COMMON, "CHD convert output resolved: source='%s' primary='%s' output='%s'",
 			result.sourcePath.c_str(), plan.probe.primaryFile.c_str(), result.outputPath.c_str());
 
-		const chdwriter_mame::Mode mode = plan.probe.kind == SourceKind::Iso
-			? chdwriter_mame::Mode::CreateDvd
-			: chdwriter_mame::Mode::CreateCd;
-		result.commandLine = strprintf("internal_chd_convert mode=%s input=\"%s\" output=\"%s\"",
+		const chdwriter_mame::Mode mode = writerModeForKind(plan.probe.kind);
+		const chdwriter_mame::CompressionProfile compressionProfile = writerCompressionProfile(options.compressionProfile);
+		result.commandLine = strprintf("internal_chd_convert mode=%s compression=\"%s\" input=\"%s\" output=\"%s\"",
 			mode == chdwriter_mame::Mode::CreateDvd ? "dvd" : "cd",
+			chdwriter_mame::describeCompressionStack(mode, compressionProfile),
 			plan.probe.primaryFile.c_str(), result.outputPath.c_str());
-		NOTICE_LOG(COMMON, "CHD convert resolved: mode=%s input='%s' output='%s'",
+		NOTICE_LOG(COMMON, "CHD convert resolved: mode=%s compression='%s' input='%s' output='%s'",
 			mode == chdwriter_mame::Mode::CreateDvd ? "dvd" : "cd",
+			chdwriter_mame::describeCompressionStack(mode, compressionProfile),
 			plan.probe.primaryFile.c_str(), result.outputPath.c_str());
 
 		std::string error;
 		result.success = chdwriter_mame::runConversion(mode, plan.probe.primaryFile, result.outputPath, error,
-			options.progressCallback);
+			options.progressCallback, compressionProfile);
 		result.exitCode = result.success ? 0 : -2;
 		result.message = result.success
 			? strprintf("Conversion complete: %s", result.outputPath.c_str())

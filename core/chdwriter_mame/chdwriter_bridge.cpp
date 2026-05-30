@@ -36,6 +36,41 @@
 namespace chdwriter_mame {
 namespace {
 
+struct CompressionStack
+{
+	chd_codec_type codecs[4];
+	const char *label;
+};
+
+static CompressionStack compressionStackForProfile(Mode mode, CompressionProfile profile)
+{
+	if (mode == Mode::CreateCd)
+	{
+		switch (profile)
+		{
+		case CompressionProfile::Fast:
+			return { { CHD_CODEC_CD_ZLIB, CHD_CODEC_CD_FLAC, CHD_CODEC_NONE, CHD_CODEC_NONE }, "cdzl,cdfl" };
+		case CompressionProfile::Balanced:
+			return { { CHD_CODEC_CD_ZSTD, CHD_CODEC_CD_ZLIB, CHD_CODEC_CD_FLAC, CHD_CODEC_NONE }, "cdzs,cdzl,cdfl" };
+		case CompressionProfile::HighCompression:
+			return { { CHD_CODEC_CD_LZMA, CHD_CODEC_CD_ZLIB, CHD_CODEC_CD_FLAC, CHD_CODEC_NONE }, "cdlz,cdzl,cdfl" };
+		case CompressionProfile::MaxArchive:
+			return { { CHD_CODEC_CD_LZMA, CHD_CODEC_CD_ZSTD, CHD_CODEC_CD_ZLIB, CHD_CODEC_CD_FLAC }, "cdlz,cdzs,cdzl,cdfl" };
+		}
+		return { { CHD_CODEC_CD_ZSTD, CHD_CODEC_CD_ZLIB, CHD_CODEC_CD_FLAC, CHD_CODEC_NONE }, "cdzs,cdzl,cdfl" };
+	}
+
+	switch (profile)
+	{
+	case CompressionProfile::Fast:
+	case CompressionProfile::Balanced:
+	case CompressionProfile::HighCompression:
+	case CompressionProfile::MaxArchive:
+		return { { CHD_CODEC_ZLIB, CHD_CODEC_HUFFMAN, CHD_CODEC_NONE, CHD_CODEC_NONE }, "zlib,huff" };
+	}
+	return { { CHD_CODEC_ZLIB, CHD_CODEC_HUFFMAN, CHD_CODEC_NONE, CHD_CODEC_NONE }, "zlib,huff" };
+}
+
 class rawfile_compressor : public chd_file_compressor
 {
 public:
@@ -280,9 +315,11 @@ static std::error_condition write_cd_metadata(chd_file *chd, const cdrom_file::t
 }
 
 static bool runCdConversion(const std::string& inputPath, const std::string& outputPath, std::string& errorMessage,
+	CompressionProfile compressionProfile,
 	const std::function<void(double complete, double ratio, const std::string& phase)>& progressCallback)
 {
-	NOTICE_LOG(COMMON, "CHD CD conversion begin: input='%s' output='%s'", inputPath.c_str(), outputPath.c_str());
+	NOTICE_LOG(COMMON, "CHD CD conversion begin: input='%s' output='%s' compression='%s'",
+		inputPath.c_str(), outputPath.c_str(), describeCompressionStack(Mode::CreateCd, compressionProfile));
 	cdrom_file::track_input_info track_info;
 	cdrom_file::toc toc = { 0 };
 	std::error_condition err = cdrom_file::parse_toc(inputPath, toc, track_info);
@@ -306,9 +343,9 @@ static bool runCdConversion(const std::string& inputPath, const std::string& out
 	}
 
 	const uint32_t hunk_size = cdrom_file::FRAMES_PER_HUNK * cdrom_file::FRAME_SIZE;
-	const chd_codec_type compression[4] = { CHD_CODEC_CD_ZLIB, CHD_CODEC_ZLIB, CHD_CODEC_HUFFMAN, CHD_CODEC_NONE };
+	const CompressionStack compression = compressionStackForProfile(Mode::CreateCd, compressionProfile);
 	auto chd = std::make_unique<cd_compressor>(toc, track_info);
-	err = create_output_chd(*chd, outputPath, (uint64_t)totalSectors * cdrom_file::FRAME_SIZE, hunk_size, cdrom_file::FRAME_SIZE, compression);
+	err = create_output_chd(*chd, outputPath, (uint64_t)totalSectors * cdrom_file::FRAME_SIZE, hunk_size, cdrom_file::FRAME_SIZE, compression.codecs);
 	if (err)
 	{
 		errorMessage = err.message();
@@ -339,9 +376,11 @@ static bool runCdConversion(const std::string& inputPath, const std::string& out
 }
 
 static bool runDvdConversion(const std::string& inputPath, const std::string& outputPath, std::string& errorMessage,
+	CompressionProfile compressionProfile,
 	const std::function<void(double complete, double ratio, const std::string& phase)>& progressCallback)
 {
-	NOTICE_LOG(COMMON, "CHD DVD conversion begin: input='%s' output='%s'", inputPath.c_str(), outputPath.c_str());
+	NOTICE_LOG(COMMON, "CHD DVD conversion begin: input='%s' output='%s' compression='%s'",
+		inputPath.c_str(), outputPath.c_str(), describeCompressionStack(Mode::CreateDvd, compressionProfile));
 	util::core_file::ptr inputFile;
 	std::error_condition err = util::core_file::open(inputPath, OPEN_FLAG_READ, inputFile);
 	if (err)
@@ -367,9 +406,9 @@ static bool runDvdConversion(const std::string& inputPath, const std::string& ou
 	}
 
 	const uint32_t hunk_size = 2 * 2048;
-	const chd_codec_type compression[4] = { CHD_CODEC_ZLIB, CHD_CODEC_HUFFMAN, CHD_CODEC_NONE, CHD_CODEC_NONE };
+	const CompressionStack compression = compressionStackForProfile(Mode::CreateDvd, compressionProfile);
 	auto chd = std::make_unique<rawfile_compressor>(*inputFile, 0, inputSize);
-	err = create_output_chd(*chd, outputPath, inputSize, hunk_size, 2048, compression);
+	err = create_output_chd(*chd, outputPath, inputSize, hunk_size, 2048, compression.codecs);
 	if (err)
 	{
 		errorMessage = err.message();
@@ -401,16 +440,39 @@ static bool runDvdConversion(const std::string& inputPath, const std::string& ou
 
 } // namespace
 
+const char *describeCompressionProfile(CompressionProfile profile)
+{
+	switch (profile)
+	{
+	case CompressionProfile::Fast:
+		return "Fast";
+	case CompressionProfile::Balanced:
+		return "Balanced / Recommended";
+	case CompressionProfile::HighCompression:
+		return "High Compression";
+	case CompressionProfile::MaxArchive:
+		return "Max / Archive";
+	}
+	return "Balanced / Recommended";
+}
+
+const char *describeCompressionStack(Mode mode, CompressionProfile profile)
+{
+	return compressionStackForProfile(mode, profile).label;
+}
+
 bool runConversion(Mode mode, const std::string& inputPath, const std::string& outputPath, std::string& errorMessage,
-	const std::function<void(double complete, double ratio, const std::string& phase)>& progressCallback)
+	const std::function<void(double complete, double ratio, const std::string& phase)>& progressCallback,
+	CompressionProfile compressionProfile)
 {
 	try
 	{
-		NOTICE_LOG(COMMON, "CHD runConversion dispatch: mode=%s input='%s' output='%s'",
-			mode == Mode::CreateCd ? "cd" : "dvd", inputPath.c_str(), outputPath.c_str());
+		NOTICE_LOG(COMMON, "CHD runConversion dispatch: mode=%s compression='%s' input='%s' output='%s'",
+			mode == Mode::CreateCd ? "cd" : "dvd", describeCompressionStack(mode, compressionProfile),
+			inputPath.c_str(), outputPath.c_str());
 		if (mode == Mode::CreateCd)
-			return runCdConversion(inputPath, outputPath, errorMessage, progressCallback);
-		return runDvdConversion(inputPath, outputPath, errorMessage, progressCallback);
+			return runCdConversion(inputPath, outputPath, errorMessage, compressionProfile, progressCallback);
+		return runDvdConversion(inputPath, outputPath, errorMessage, compressionProfile, progressCallback);
 	}
 	catch (const std::error_condition& e)
 	{

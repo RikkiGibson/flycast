@@ -65,9 +65,28 @@ static constexpr std::array<const char*, 3> kScopes = {{
 	"Whole Folder",
 }};
 #endif
+static constexpr std::array<const char*, 4> kCompressionProfiles = {{
+	"Fast",
+	"Balanced / Recommended",
+	"High Compression",
+	"Max / Archive",
+}};
+static constexpr std::array<chdconvert::CompressionProfile, 4> kCompressionProfileValues = {{
+	chdconvert::CompressionProfile::Fast,
+	chdconvert::CompressionProfile::Balanced,
+	chdconvert::CompressionProfile::HighCompression,
+	chdconvert::CompressionProfile::MaxArchive,
+}};
+static constexpr std::array<const char*, 4> kCompressionProfileSuffixes = {{
+	"fast",
+	"balanced",
+	"high",
+	"max",
+}};
 
 static ChdPage s_page = ChdPage::Overview;
 static int s_scope = 0;
+static int s_compressionProfile = (int)chdconvert::CompressionProfile::Balanced;
 static std::string s_sourcePath;
 static std::string s_outputPath;
 static std::string s_sourcePathText;
@@ -107,7 +126,35 @@ struct ConversionRunStats
 	std::string phase;
 };
 
+struct BenchmarkProfileStats
+{
+	chdconvert::CompressionProfile profile = chdconvert::CompressionProfile::Balanced;
+	std::string stack;
+	uint64_t inputBytes = 0;
+	uint64_t outputBytes = 0;
+	uint64_t elapsedMs = 0;
+	int total = 0;
+	int ok = 0;
+	int skipped = 0;
+};
+
+struct BenchmarkItemStats
+{
+	chdconvert::CompressionProfile profile = chdconvert::CompressionProfile::Balanced;
+	std::string source;
+	std::string output;
+	std::string message;
+	uint64_t inputBytes = 0;
+	uint64_t outputBytes = 0;
+	uint64_t elapsedMs = 0;
+	bool skipped = false;
+	bool success = false;
+};
+
 static ConversionRunStats s_lastRunStats;
+static std::vector<BenchmarkProfileStats> s_lastBenchmarkStats;
+static std::vector<BenchmarkItemStats> s_lastBenchmarkItems;
+static bool s_lastRunWasBenchmark = false;
 
 static const char* pageName(ChdPage page)
 {
@@ -190,6 +237,14 @@ static std::string formatDuration(uint64_t ms)
 	return strprintf("%llus %03llums", (unsigned long long)seconds, (unsigned long long)millis);
 }
 
+static std::string formatSavedRate(uint64_t savedBytes, uint64_t elapsedMs)
+{
+	if (savedBytes == 0 || elapsedMs == 0)
+		return "--";
+	const uint64_t bytesPerMinute = (uint64_t)((double)savedBytes * 60000.0 / (double)elapsedMs);
+	return strprintf("%s/min", formatBytes(bytesPerMinute).c_str());
+}
+
 static void addTrace(const std::string& stage, const std::string& message)
 {
 	std::lock_guard<std::mutex> lock(s_conversionMutex);
@@ -214,25 +269,151 @@ static std::string pathTextForUi(const std::string& path)
 	return path;
 }
 
+static std::string fileNameForUi(const std::string& path)
+{
+	try
+	{
+		const hostfs::FileInfo info = hostfs::storage().getFileInfo(path);
+		if (!info.name.empty())
+			return info.name;
+	}
+	catch (...)
+	{
+	}
+	const size_t separator = path.find_last_of("/\\");
+	return separator == std::string::npos ? path : path.substr(separator + 1);
+}
+
 static bool isContentUriPath(const std::string& path)
 {
 	return path.rfind("content://", 0) == 0;
 }
 
-static std::string outputPathForSource(const std::string& sourcePath, const std::string& outputDirectory)
+static std::string outputPathForSource(const std::string& sourcePath, const std::string& outputDirectory, const std::string& outputFileSuffix = {})
 {
 	if (sourcePath.empty() || outputDirectory.empty())
 		return {};
 	try
 	{
 		const hostfs::FileInfo sourceInfo = hostfs::storage().getFileInfo(sourcePath);
-		const std::string baseName = get_file_basename(sourceInfo.name) + ".chd";
+		const std::string baseName = get_file_basename(sourceInfo.name) + outputFileSuffix + ".chd";
 		return hostfs::storage().getSubPath(outputDirectory, baseName);
 	}
 	catch (...)
 	{
 		return {};
 	}
+}
+
+static std::string benchmarkOutputPrefixForSource(const std::string& sourcePath, const char *profileSuffix)
+{
+	try
+	{
+		const hostfs::FileInfo sourceInfo = hostfs::storage().getFileInfo(sourcePath);
+		return get_file_basename(sourceInfo.name) + "-bench-" + profileSuffix + "-";
+	}
+	catch (...)
+	{
+		return {};
+	}
+}
+
+static bool parseBenchmarkOutputId(const std::string& outputName, const std::string& sourcePath,
+	const char *profileSuffix, uint64_t& benchmarkId)
+{
+	const std::string prefix = benchmarkOutputPrefixForSource(sourcePath, profileSuffix);
+	static const std::string extension = ".chd";
+	if (prefix.empty() || outputName.size() <= prefix.size() + extension.size())
+		return false;
+	if (outputName.rfind(prefix, 0) != 0)
+		return false;
+	if (outputName.compare(outputName.size() - extension.size(), extension.size(), extension) != 0)
+		return false;
+
+	const std::string idText = outputName.substr(prefix.size(), outputName.size() - prefix.size() - extension.size());
+	if (idText.empty())
+		return false;
+
+	uint64_t parsedId = 0;
+	for (char ch : idText)
+	{
+		if (ch < '0' || ch > '9')
+			return false;
+		parsedId = parsedId * 10 + (uint64_t)(ch - '0');
+	}
+	benchmarkId = parsedId;
+	return true;
+}
+
+static uint64_t selectBenchmarkIdForResume(const std::vector<std::string>& sources, const std::string& outputDirectory,
+	uint64_t fallbackBenchmarkId)
+{
+	uint64_t selectedBenchmarkId = fallbackBenchmarkId;
+	bool foundBenchmarkId = false;
+	try
+	{
+		const std::vector<hostfs::FileInfo> outputs = hostfs::storage().listContent(outputDirectory);
+		for (const hostfs::FileInfo& output : outputs)
+		{
+			if (output.isDirectory)
+				continue;
+			for (const std::string& source : sources)
+			{
+				for (const char *profileSuffix : kCompressionProfileSuffixes)
+				{
+					uint64_t benchmarkId = 0;
+					if (!parseBenchmarkOutputId(output.name, source, profileSuffix, benchmarkId))
+						continue;
+
+					if (!foundBenchmarkId || benchmarkId > selectedBenchmarkId)
+					{
+						selectedBenchmarkId = benchmarkId;
+						foundBenchmarkId = true;
+					}
+				}
+			}
+		}
+	}
+	catch (const std::exception& e)
+	{
+		addTrace("WARN", strprintf("Benchmark resume scan failed: %s", e.what()));
+		return fallbackBenchmarkId;
+	}
+	catch (...)
+	{
+		addTrace("WARN", "Benchmark resume scan failed with an unknown error.");
+		return fallbackBenchmarkId;
+	}
+	return foundBenchmarkId ? selectedBenchmarkId : fallbackBenchmarkId;
+}
+
+static uint64_t measureSourceBytes(const std::string& sourcePath)
+{
+	const hostfs::FileInfo sourceInfo = hostfs::storage().getFileInfo(sourcePath);
+	uint64_t sourceBytes = sourceInfo.size;
+	const std::vector<std::string> sourcePaths = chdconvert::collectSourceSetPaths(sourcePath);
+	if (!sourcePaths.empty())
+	{
+		uint64_t measuredBytes = 0;
+		bool measuredSuccessfully = true;
+		for (const std::string& path : sourcePaths)
+		{
+			try
+			{
+				const hostfs::FileInfo sourceFileInfo = hostfs::storage().getFileInfo(path);
+				if (!sourceFileInfo.isDirectory)
+					measuredBytes += sourceFileInfo.size;
+			}
+			catch (...)
+			{
+				measuredSuccessfully = false;
+				break;
+			}
+		}
+		if (measuredSuccessfully && measuredBytes > 0)
+			sourceBytes = measuredBytes;
+	}
+	return sourceBytes;
 }
 
 static void assignSourcePath(const std::string& path)
@@ -432,7 +613,34 @@ static const char* currentScopeLabel()
 	return scopeLabel(normalizedScope());
 }
 
-static void startAsyncConversion(const std::vector<std::string>& sources, const std::string& outputDirectory)
+static chdconvert::CompressionProfile currentCompressionProfile()
+{
+	return kCompressionProfileValues[std::clamp(s_compressionProfile, 0, (int)kCompressionProfileValues.size() - 1)];
+}
+
+static const char* currentCompressionStack()
+{
+	const chdconvert::SourceKind kind = s_hasPlan ? s_lastPlan.probe.kind : chdconvert::SourceKind::CueBin;
+	return chdconvert::describeCompressionStack(kind, currentCompressionProfile());
+}
+
+static std::string compressionStackSummaryForSources(const std::vector<std::string>& sources, chdconvert::CompressionProfile profile)
+{
+	std::string stack;
+	for (const std::string& source : sources)
+	{
+		const chdconvert::SourceProbe probe = chdconvert::probeSource(source);
+		const char *sourceStack = chdconvert::describeCompressionStack(probe.kind, profile);
+		if (stack.empty())
+			stack = sourceStack;
+		else if (stack != sourceStack)
+			return "mixed CD/DVD stacks";
+	}
+	return stack.empty() ? chdconvert::describeCompressionStack(chdconvert::SourceKind::CueBin, profile) : stack;
+}
+
+static void startAsyncConversion(const std::vector<std::string>& sources, const std::string& outputDirectory,
+	chdconvert::CompressionProfile compressionProfile)
 {
 	pollConversionWorker();
 	if (outputDirectory.empty())
@@ -467,17 +675,22 @@ static void startAsyncConversion(const std::vector<std::string>& sources, const 
 		s_pendingStatusUpdate.clear();
 		s_pendingCommandUpdate.clear();
 		s_lastRunStats = {};
+		s_lastBenchmarkStats.clear();
+		s_lastBenchmarkItems.clear();
+		s_lastRunWasBenchmark = false;
 	}
 	addTrace("RUN", strprintf("Starting conversion batch with %d source(s).", (int)sources.size()));
 	addTrace("RUN", strprintf("Output directory: %s", outputDirectory.c_str()));
-	NOTICE_LOG(COMMON, "CHD UI run start: sourcePath='%s' outputDirectory='%s' sources=%d",
-		s_sourcePath.c_str(), outputDirectory.c_str(), (int)sources.size());
+	addTrace("RUN", strprintf("Compression profile: %s.", chdconvert::describeCompressionProfile(compressionProfile)));
+	NOTICE_LOG(COMMON, "CHD UI run start: sourcePath='%s' outputDirectory='%s' sources=%d compression='%s'",
+		s_sourcePath.c_str(), outputDirectory.c_str(), (int)sources.size(), chdconvert::describeCompressionProfile(compressionProfile));
 
-	s_conversionFuture = std::async(std::launch::async, [sources, outputDirectory]() {
+	s_conversionFuture = std::async(std::launch::async, [sources, outputDirectory, compressionProfile]() {
 		try
 		{
 			chdconvert::ConversionOptions options;
 			options.outputDirectory = outputDirectory;
+			options.compressionProfile = compressionProfile;
 			const auto runStart = std::chrono::steady_clock::now();
 			uint64_t inputBytesTotal = 0;
 			uint64_t outputBytesTotal = 0;
@@ -523,29 +736,7 @@ static void startAsyncConversion(const std::vector<std::string>& sources, const 
 					continue;
 				}
 				const hostfs::FileInfo sourceInfo = hostfs::storage().getFileInfo(sources[i]);
-				uint64_t sourceBytes = sourceInfo.size;
-				const std::vector<std::string> sourcePaths = chdconvert::collectSourceSetPaths(sources[i]);
-				if (!sourcePaths.empty())
-				{
-					uint64_t measuredBytes = 0;
-					bool measuredSuccessfully = true;
-					for (const std::string& sourcePath : sourcePaths)
-					{
-						try
-						{
-							const hostfs::FileInfo sourceFileInfo = hostfs::storage().getFileInfo(sourcePath);
-							if (!sourceFileInfo.isDirectory)
-								measuredBytes += sourceFileInfo.size;
-						}
-						catch (...)
-						{
-							measuredSuccessfully = false;
-							break;
-						}
-					}
-					if (measuredSuccessfully && measuredBytes > 0)
-						sourceBytes = measuredBytes;
-				}
+				const uint64_t sourceBytes = measureSourceBytes(sources[i]);
 				NOTICE_LOG(COMMON, "CHD worker source info: source='%s' size=%llu isDirectory=%d writable=%d",
 					sources[i].c_str(), (unsigned long long)sourceInfo.size, sourceInfo.isDirectory ? 1 : 0, sourceInfo.isWritable ? 1 : 0);
 				const chdconvert::ConversionResult result = chdconvert::runSingleConversion(sources[i], options);
@@ -630,6 +821,276 @@ static void startAsyncConversion(const std::vector<std::string>& sources, const 
 	});
 }
 
+static void startAsyncBenchmark(const std::vector<std::string>& sources, const std::string& outputDirectory)
+{
+	pollConversionWorker();
+	if (outputDirectory.empty())
+	{
+		setStatus("Select an output folder before running the benchmark.");
+		addTrace("BENCH", "Benchmark rejected: output folder is required.");
+		return;
+	}
+	if (sources.empty())
+	{
+		setStatus("No supported conversion source found.");
+		addTrace("BENCH", "No supported conversion source found.");
+		return;
+	}
+	if (s_conversionRunning.load())
+	{
+		setStatus("A conversion job is already running.");
+		addTrace("BENCH", "Requested benchmark while another conversion job is running.");
+		return;
+	}
+
+	s_conversionRunning.store(true);
+	s_conversionTotal.store((int)(sources.size() * kCompressionProfileValues.size()));
+	s_conversionDone.store(0);
+	s_conversionOk.store(0);
+	s_conversionSkipped.store(0);
+	{
+		std::lock_guard<std::mutex> lock(s_conversionMutex);
+		s_conversionPhase = "Preparing benchmark...";
+		s_pendingStatusUpdate.clear();
+		s_pendingCommandUpdate.clear();
+		s_lastRunStats = {};
+		s_lastBenchmarkStats.clear();
+		s_lastBenchmarkItems.clear();
+		s_lastRunWasBenchmark = true;
+	}
+
+	const uint64_t fallbackBenchmarkId = (uint64_t)std::chrono::duration_cast<std::chrono::milliseconds>(
+		std::chrono::system_clock::now().time_since_epoch()).count();
+	const uint64_t benchmarkId = selectBenchmarkIdForResume(sources, outputDirectory, fallbackBenchmarkId);
+	addTrace("BENCH", strprintf("Starting compression benchmark with %d source(s) across %d profiles.",
+		(int)sources.size(), (int)kCompressionProfileValues.size()));
+	if (benchmarkId != fallbackBenchmarkId)
+		addTrace("BENCH", strprintf("Resuming benchmark output set %llu.", (unsigned long long)benchmarkId));
+
+	s_conversionFuture = std::async(std::launch::async, [sources, outputDirectory, benchmarkId]() {
+		try
+		{
+			const auto benchmarkStart = std::chrono::steady_clock::now();
+			for (size_t profileIndex = 0; profileIndex < kCompressionProfileValues.size(); profileIndex++)
+			{
+				const chdconvert::CompressionProfile profile = kCompressionProfileValues[profileIndex];
+				const std::string suffix = strprintf("-bench-%s-%llu", kCompressionProfileSuffixes[profileIndex],
+					(unsigned long long)benchmarkId);
+				const auto profileStart = std::chrono::steady_clock::now();
+				BenchmarkProfileStats profileStats;
+				profileStats.profile = profile;
+				profileStats.stack = compressionStackSummaryForSources(sources, profile);
+				profileStats.total = (int)sources.size();
+
+				addTrace("BENCH", strprintf("Profile %s using %s.",
+					chdconvert::describeCompressionProfile(profile), profileStats.stack.c_str()));
+
+				chdconvert::ConversionOptions options;
+				options.outputDirectory = outputDirectory;
+				options.outputFileSuffix = suffix;
+				options.compressionProfile = profile;
+				options.progressCallback = [benchmarkStart](double complete, double ratio, const std::string& phase) {
+					const uint64_t elapsedMs = (uint64_t)std::chrono::duration_cast<std::chrono::milliseconds>(
+						std::chrono::steady_clock::now() - benchmarkStart).count();
+					std::lock_guard<std::mutex> lock(s_conversionMutex);
+					s_lastRunStats.active = true;
+					s_lastRunStats.complete = false;
+					s_lastRunStats.phase = phase;
+					s_lastRunStats.progress = std::clamp(complete, 0.0, 1.0);
+					s_lastRunStats.ratio = ratio;
+					s_lastRunStats.elapsedMs = elapsedMs;
+				};
+
+				for (size_t i = 0; i < sources.size(); i++)
+				{
+					const std::string phase = strprintf("Benchmark %s %d/%d: %s",
+						chdconvert::describeCompressionProfile(profile), (int)i + 1, (int)sources.size(), sources[i].c_str());
+					{
+						std::lock_guard<std::mutex> lock(s_conversionMutex);
+						s_conversionPhase = phase;
+						s_lastRunStats.phase = phase;
+					}
+					addTrace("BENCH", phase);
+
+					const auto itemStart = std::chrono::steady_clock::now();
+					BenchmarkItemStats itemStats;
+					itemStats.profile = profile;
+					itemStats.source = sources[i];
+					uint64_t sourceBytes = 0;
+					try
+					{
+						sourceBytes = measureSourceBytes(sources[i]);
+						itemStats.inputBytes = sourceBytes;
+					}
+					catch (const std::exception& e)
+					{
+						itemStats.message = strprintf("Source size check failed: %s", e.what());
+						itemStats.elapsedMs = (uint64_t)std::chrono::duration_cast<std::chrono::milliseconds>(
+							std::chrono::steady_clock::now() - itemStart).count();
+						addTrace("FAIL", itemStats.message);
+						s_conversionDone.fetch_add(1);
+						std::lock_guard<std::mutex> lock(s_conversionMutex);
+						s_lastBenchmarkItems.push_back(itemStats);
+						s_pendingStatusUpdate = itemStats.message;
+						continue;
+					}
+					const std::string outputPath = outputPathForSource(sources[i], outputDirectory, suffix);
+
+					bool outputExists = false;
+					if (!outputPath.empty())
+					{
+						try
+						{
+							outputExists = hostfs::storage().exists(outputPath);
+						}
+						catch (const std::exception& e)
+						{
+							addTrace("WARN", strprintf("Benchmark resume check failed for %s: %s", outputPath.c_str(), e.what()));
+						}
+						catch (...)
+						{
+							addTrace("WARN", strprintf("Benchmark resume check failed for %s.", outputPath.c_str()));
+						}
+					}
+
+					if (outputExists)
+					{
+						profileStats.inputBytes += sourceBytes;
+						itemStats.output = outputPath;
+						itemStats.message = "Existing benchmark output";
+						itemStats.skipped = true;
+						itemStats.success = true;
+						try
+						{
+							const hostfs::FileInfo outInfo = hostfs::storage().getFileInfo(outputPath);
+							if (!outInfo.isDirectory)
+							{
+								profileStats.outputBytes += outInfo.size;
+								itemStats.outputBytes = outInfo.size;
+							}
+						}
+						catch (const std::exception& e)
+						{
+							itemStats.message = strprintf("Existing benchmark output; size check failed: %s", e.what());
+						}
+						catch (...)
+						{
+						}
+						itemStats.elapsedMs = (uint64_t)std::chrono::duration_cast<std::chrono::milliseconds>(
+							std::chrono::steady_clock::now() - itemStart).count();
+						profileStats.skipped++;
+						s_conversionSkipped.fetch_add(1);
+						s_conversionDone.fetch_add(1);
+						{
+							std::lock_guard<std::mutex> lock(s_conversionMutex);
+							s_lastBenchmarkItems.push_back(itemStats);
+						}
+						addTrace("SKIP", strprintf("Benchmark output already exists: %s", outputPath.c_str()));
+						continue;
+					}
+
+					const chdconvert::ConversionResult result = chdconvert::runSingleConversion(sources[i], options);
+					itemStats.output = result.outputPath;
+					itemStats.message = result.message;
+					itemStats.success = result.success;
+					if (!result.commandLine.empty())
+						addTrace("CMD", result.commandLine);
+					if (result.success)
+					{
+						profileStats.ok++;
+						s_conversionOk.fetch_add(1);
+						profileStats.inputBytes += sourceBytes;
+						try
+						{
+							if (!result.outputPath.empty())
+							{
+								const hostfs::FileInfo outInfo = hostfs::storage().getFileInfo(result.outputPath);
+								if (!outInfo.isDirectory)
+								{
+									profileStats.outputBytes += outInfo.size;
+									itemStats.outputBytes = outInfo.size;
+								}
+							}
+						}
+						catch (...)
+						{
+						}
+						addTrace("OK", result.message);
+					}
+					else
+					{
+						addTrace("FAIL", result.message);
+					}
+					itemStats.elapsedMs = (uint64_t)std::chrono::duration_cast<std::chrono::milliseconds>(
+						std::chrono::steady_clock::now() - itemStart).count();
+					s_conversionDone.fetch_add(1);
+					std::lock_guard<std::mutex> lock(s_conversionMutex);
+					s_lastBenchmarkItems.push_back(itemStats);
+					if (!result.commandLine.empty())
+						s_pendingCommandUpdate = result.commandLine;
+					s_pendingStatusUpdate = result.message;
+				}
+
+				profileStats.elapsedMs = (uint64_t)std::chrono::duration_cast<std::chrono::milliseconds>(
+					std::chrono::steady_clock::now() - profileStart).count();
+				{
+					std::lock_guard<std::mutex> lock(s_conversionMutex);
+					s_lastBenchmarkStats.push_back(profileStats);
+				}
+				const uint64_t savedBytes = profileStats.inputBytes > profileStats.outputBytes
+					? profileStats.inputBytes - profileStats.outputBytes
+					: 0;
+				addTrace("BENCH", strprintf("%s finished in %s, saved %s.",
+					chdconvert::describeCompressionProfile(profile), formatDuration(profileStats.elapsedMs).c_str(),
+					formatBytes(savedBytes).c_str()));
+			}
+
+			const int ok = s_conversionOk.load();
+			const int skipped = s_conversionSkipped.load();
+			const int total = s_conversionTotal.load();
+			const int failed = std::max(0, total - ok - skipped);
+			const uint64_t elapsedMs = (uint64_t)std::chrono::duration_cast<std::chrono::milliseconds>(
+				std::chrono::steady_clock::now() - benchmarkStart).count();
+			{
+				std::lock_guard<std::mutex> lock(s_conversionMutex);
+				s_conversionPhase = "Benchmark complete.";
+				s_pendingStatusUpdate = strprintf("Benchmark finished: %d succeeded, %d skipped, %d failed.", ok, skipped, failed);
+				s_lastRunStats.elapsedMs = elapsedMs;
+				s_lastRunStats.etaMs = 0;
+				s_lastRunStats.progress = 1.0;
+				s_lastRunStats.total = total;
+				s_lastRunStats.ok = ok;
+				s_lastRunStats.skipped = skipped;
+				s_lastRunStats.active = false;
+				s_lastRunStats.complete = true;
+				s_lastRunWasBenchmark = true;
+			}
+			addTrace("DONE", strprintf("Benchmark finished: %d succeeded, %d skipped, %d failed in %s.", ok, skipped, failed, formatDuration(elapsedMs).c_str()));
+		}
+		catch (const std::exception& e)
+		{
+			const std::string message = strprintf("Benchmark worker crashed: %s", e.what());
+			{
+				std::lock_guard<std::mutex> lock(s_conversionMutex);
+				s_conversionPhase = "Benchmark aborted.";
+				s_pendingStatusUpdate = message;
+			}
+			addTrace("CRASH", message);
+		}
+		catch (...)
+		{
+			const std::string message = "Benchmark worker crashed with an unknown error.";
+			{
+				std::lock_guard<std::mutex> lock(s_conversionMutex);
+				s_conversionPhase = "Benchmark aborted.";
+				s_pendingStatusUpdate = message;
+			}
+			addTrace("CRASH", message);
+		}
+		s_conversionRunning.store(false);
+	});
+}
+
 static void renderHeroCard()
 {
 	ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, uiScaled(14.0f));
@@ -670,7 +1131,7 @@ static void renderHeroCard()
 		ImGui::TableNextColumn();
 		ImGui::BeginGroup();
 		header("Compression");
-		ImGui::TextWrapped("Balanced backend defaults for this first release.");
+		ImGui::TextWrapped("Fast, Balanced, High Compression, and Max / Archive profiles.");
 		ImGui::EndGroup();
 
 		ImGui::TableNextColumn();
@@ -759,8 +1220,10 @@ static void renderConverterTab()
 
 		ImGui::Spacing();
 		header("Compression");
-		ImGui::TextUnformatted("Balanced");
-		ImGui::TextWrapped("Uses the internal CHD backend defaults for this release.");
+		ImGui::SetNextItemWidth(-1.0f);
+		if (ImGui::Combo("##chd_compression_profile", &s_compressionProfile, kCompressionProfiles.data(), (int)kCompressionProfiles.size()))
+			setStatus("Compression profile updated.");
+		ImGui::TextWrapped("Stack for detected media: %s", currentCompressionStack());
 
 		ImGui::Spacing();
 		header("File Handling");
@@ -783,7 +1246,8 @@ static void renderConverterTab()
 		ImGui::TextUnformatted("Current configuration");
 		ImGui::Separator();
 		ImGui::Text("Scope: %s", currentScopeLabel());
-		ImGui::TextUnformatted("Compression: Balanced");
+		ImGui::Text("Compression: %s", chdconvert::describeCompressionProfile(currentCompressionProfile()));
+		ImGui::Text("Compression stack: %s", currentCompressionStack());
 		ImGui::TextUnformatted("Original files: preserved");
 		ImGui::Text("Whole folder scan: %s", isWholeFolderScope(s_scope) ? "Yes" : "No");
 		ImGui::TextWrapped("Source: %s", s_sourcePathText.empty() ? "not selected" : s_sourcePathText.c_str());
@@ -810,7 +1274,7 @@ static void renderConverterTab()
 				refreshPlan();
 			const std::vector<std::string> sources = collectSourcesForScope(s_sourcePath, s_scope);
 			addTrace("RUN", strprintf("Collected %d source(s) for immediate run.", (int)sources.size()));
-			startAsyncConversion(sources, s_outputPath);
+			startAsyncConversion(sources, s_outputPath, currentCompressionProfile());
 			if (sources.empty())
 			{
 #ifdef __ANDROID__
@@ -821,8 +1285,19 @@ static void renderConverterTab()
 					setStatus(s_lastPlan.probe.summary);
 			}
 		}
+		if (ImGui::Button("Benchmark all profiles", ImVec2(-1, uiScaled(34.0f))))
+		{
+			NOTICE_LOG(COMMON, "CHD UI action: Benchmark all profiles");
+			if (!s_hasPlan || s_lastPlan.probe.sourcePath != s_sourcePath)
+				refreshPlan();
+			const std::vector<std::string> sources = collectSourcesForScope(s_sourcePath, s_scope);
+			addTrace("BENCH", strprintf("Collected %d source(s) for benchmark run.", (int)sources.size()));
+			startAsyncBenchmark(sources, s_outputPath);
+			if (sources.empty())
+				setStatus(s_lastPlan.probe.summary);
+		}
 
-		ImGui::TextWrapped("Run conversion now executes the internal CHD backend flow for supported sources.");
+		ImGui::TextWrapped("Benchmark all profiles creates one suffixed CHD per profile and reports speed, size, and saved-space efficiency.");
 		if (s_conversionRunning.load() || s_conversionTotal.load() > 0)
 		{
 			const int total = std::max(1, s_conversionTotal.load());
@@ -830,10 +1305,16 @@ static void renderConverterTab()
 			float progress = (float)done / (float)total;
 			std::string phase;
 			ConversionRunStats stats;
+			std::vector<BenchmarkProfileStats> benchmarkStats;
+			std::vector<BenchmarkItemStats> benchmarkItems;
+			bool wasBenchmark = false;
 			{
 				std::lock_guard<std::mutex> lock(s_conversionMutex);
 				phase = s_conversionPhase;
 				stats = s_lastRunStats;
+				benchmarkStats = s_lastBenchmarkStats;
+				benchmarkItems = s_lastBenchmarkItems;
+				wasBenchmark = s_lastRunWasBenchmark;
 			}
 			if (stats.active)
 				progress = (float)std::clamp(stats.progress, 0.0, 1.0);
@@ -857,27 +1338,178 @@ static void renderConverterTab()
 				ImGui::TextWrapped("%s", phase.c_str());
 			if (stats.complete)
 			{
-				const uint64_t savedBytes = stats.inputBytes > stats.outputBytes ? (stats.inputBytes - stats.outputBytes) : 0;
-				const double savedPct = stats.inputBytes > 0 ? (double)savedBytes * 100.0 / (double)stats.inputBytes : 0.0;
 				ImGui::Spacing();
-				ImGui::TextUnformatted("Run Results");
-				if (ImGui::BeginTable("CHDRunStats", 2, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_NoSavedSettings))
+				if (wasBenchmark)
 				{
-					ImGui::TableNextColumn(); ImGui::TextUnformatted("Elapsed");
-					ImGui::TableNextColumn(); ImGui::TextUnformatted(formatDuration(stats.elapsedMs).c_str());
-					ImGui::TableNextColumn(); ImGui::TextUnformatted("Input Size");
-					ImGui::TableNextColumn(); ImGui::TextUnformatted(formatBytes(stats.inputBytes).c_str());
-					ImGui::TableNextColumn(); ImGui::TextUnformatted("Output Size");
-					ImGui::TableNextColumn(); ImGui::TextUnformatted(formatBytes(stats.outputBytes).c_str());
-					ImGui::TableNextColumn(); ImGui::TextUnformatted("Space Saved");
-					ImGui::TableNextColumn(); ImGui::TextUnformatted(strprintf("%s (%.2f%%)", formatBytes(savedBytes).c_str(), savedPct).c_str());
-					ImGui::TableNextColumn(); ImGui::TextUnformatted("Succeeded");
-					ImGui::TableNextColumn(); ImGui::TextUnformatted(strprintf("%d", stats.ok).c_str());
-					ImGui::TableNextColumn(); ImGui::TextUnformatted("Skipped");
-					ImGui::TableNextColumn(); ImGui::TextUnformatted(strprintf("%d", stats.skipped).c_str());
-					ImGui::TableNextColumn(); ImGui::TextUnformatted("Failed");
-					ImGui::TableNextColumn(); ImGui::TextUnformatted(strprintf("%d", std::max(0, stats.total - stats.ok - stats.skipped)).c_str());
-					ImGui::EndTable();
+					ImGui::TextUnformatted("Benchmark Results");
+					ImGui::Text("Total elapsed: %s", formatDuration(stats.elapsedMs).c_str());
+					if (ImGui::BeginTable("CHDBenchmarkStats", 6, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg | ImGuiTableFlags_NoSavedSettings))
+					{
+						ImGui::TableSetupColumn("Profile");
+						ImGui::TableSetupColumn("Stack");
+						ImGui::TableSetupColumn("Time");
+						ImGui::TableSetupColumn("Output");
+						ImGui::TableSetupColumn("Saved");
+						ImGui::TableSetupColumn("Efficiency");
+						ImGui::TableHeadersRow();
+						for (const BenchmarkProfileStats& row : benchmarkStats)
+						{
+							const uint64_t savedBytes = row.inputBytes > row.outputBytes ? (row.inputBytes - row.outputBytes) : 0;
+							const double savedPct = row.inputBytes > 0 ? (double)savedBytes * 100.0 / (double)row.inputBytes : 0.0;
+							const double ratio = row.inputBytes > 0 ? (double)row.outputBytes / (double)row.inputBytes : 0.0;
+							ImGui::TableNextColumn(); ImGui::TextUnformatted(chdconvert::describeCompressionProfile(row.profile));
+							ImGui::TableNextColumn(); ImGui::TextWrapped("%s", row.stack.c_str());
+							ImGui::TableNextColumn(); ImGui::TextUnformatted(formatDuration(row.elapsedMs).c_str());
+							ImGui::TableNextColumn(); ImGui::Text("%s  %.3f", formatBytes(row.outputBytes).c_str(), ratio);
+							ImGui::TableNextColumn(); ImGui::Text("%s  %.2f%%", formatBytes(savedBytes).c_str(), savedPct);
+							ImGui::TableNextColumn(); ImGui::TextUnformatted(formatSavedRate(savedBytes, row.elapsedMs).c_str());
+						}
+						ImGui::EndTable();
+					}
+					ImGui::Spacing();
+					ImGui::TextUnformatted("Game Results");
+					ImGui::BeginChild("CHDBenchmarkDetailScroll", ImVec2(0, uiScaled(220.0f)), true, ImGuiWindowFlags_HorizontalScrollbar);
+					if (benchmarkItems.empty())
+					{
+						ImGui::TextUnformatted("No per-game benchmark rows were recorded.");
+					}
+					else if (ImGui::BeginTable("CHDBenchmarkItems", 5,
+						ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg | ImGuiTableFlags_NoSavedSettings))
+					{
+						struct BenchmarkGameRow
+						{
+							std::string source;
+							const BenchmarkItemStats *profiles[4] = {};
+						};
+						std::vector<BenchmarkGameRow> gameRows;
+						for (const BenchmarkItemStats& item : benchmarkItems)
+						{
+							BenchmarkGameRow *gameRow = nullptr;
+							for (BenchmarkGameRow& row : gameRows)
+							{
+								if (row.source == item.source)
+								{
+									gameRow = &row;
+									break;
+								}
+							}
+							if (gameRow == nullptr)
+							{
+								gameRows.push_back({});
+								gameRow = &gameRows.back();
+								gameRow->source = item.source;
+							}
+							for (size_t profileIndex = 0; profileIndex < kCompressionProfileValues.size(); profileIndex++)
+							{
+								if (kCompressionProfileValues[profileIndex] == item.profile)
+								{
+									gameRow->profiles[profileIndex] = &item;
+									break;
+								}
+							}
+						}
+
+						ImGui::TableSetupColumn("Game", ImGuiTableColumnFlags_WidthFixed, uiScaled(170.0f));
+						ImGui::TableSetupColumn("Fast", ImGuiTableColumnFlags_WidthFixed, uiScaled(142.0f));
+						ImGui::TableSetupColumn("Balanced", ImGuiTableColumnFlags_WidthFixed, uiScaled(142.0f));
+						ImGui::TableSetupColumn("High", ImGuiTableColumnFlags_WidthFixed, uiScaled(142.0f));
+						ImGui::TableSetupColumn("Max", ImGuiTableColumnFlags_WidthFixed, uiScaled(142.0f));
+						ImGui::TableHeadersRow();
+						for (const BenchmarkGameRow& gameRow : gameRows)
+						{
+							uint64_t inputBytes = 0;
+							for (const BenchmarkItemStats *profileRow : gameRow.profiles)
+							{
+								if (profileRow != nullptr && profileRow->inputBytes > 0)
+								{
+									inputBytes = profileRow->inputBytes;
+									break;
+								}
+							}
+							ImGui::TableNextColumn();
+							const std::string title = inputBytes > 0
+								? strprintf("%s\n%s", fileNameForUi(gameRow.source).c_str(), formatBytes(inputBytes).c_str())
+								: fileNameForUi(gameRow.source);
+							ImGui::TextWrapped("%s", title.c_str());
+
+							for (const BenchmarkItemStats *profileRow : gameRow.profiles)
+							{
+								ImGui::TableNextColumn();
+								if (profileRow == nullptr)
+								{
+									ImGui::TextDisabled("--");
+									continue;
+								}
+
+								const uint64_t savedBytes = profileRow->inputBytes > profileRow->outputBytes
+									? profileRow->inputBytes - profileRow->outputBytes
+									: 0;
+								const double savedPct = profileRow->inputBytes > 0
+									? (double)savedBytes * 100.0 / (double)profileRow->inputBytes
+									: 0.0;
+								const double ratio = profileRow->inputBytes > 0
+									? (double)profileRow->outputBytes / (double)profileRow->inputBytes
+									: 0.0;
+								if (!profileRow->success)
+								{
+									std::string failureText = profileRow->message.empty() ? "No output" : profileRow->message;
+									if (failureText.size() > 36)
+										failureText = failureText.substr(0, 33) + "...";
+									ImGui::TextWrapped("Failed\n%s", failureText.c_str());
+								}
+								else
+								{
+									const std::string statusText = profileRow->skipped ? "Resumed" : formatDuration(profileRow->elapsedMs);
+									const std::string outputText = profileRow->outputBytes > 0 ? formatBytes(profileRow->outputBytes) : "--";
+									const std::string savedText = savedBytes > 0
+										? strprintf("%s  %.1f%%", formatBytes(savedBytes).c_str(), savedPct)
+										: "--";
+									const std::string rateText = formatSavedRate(savedBytes, profileRow->elapsedMs);
+									ImGui::TextWrapped("Time: %s\nOut: %s\nSaved: %s\nRate: %s\nRatio: %.3f",
+										statusText.c_str(),
+										outputText.c_str(),
+										savedText.c_str(),
+										rateText.c_str(),
+										ratio);
+								}
+								if (ImGui::IsItemHovered())
+								{
+									ImGui::BeginTooltip();
+									ImGui::Text("Source: %s", pathTextForUi(profileRow->source).c_str());
+									ImGui::Text("Output: %s", pathTextForUi(profileRow->output).c_str());
+									if (!profileRow->message.empty())
+										ImGui::TextWrapped("%s", profileRow->message.c_str());
+									ImGui::EndTooltip();
+								}
+							}
+						}
+						ImGui::EndTable();
+					}
+					ImGui::EndChild();
+				}
+				else
+				{
+					const uint64_t savedBytes = stats.inputBytes > stats.outputBytes ? (stats.inputBytes - stats.outputBytes) : 0;
+					const double savedPct = stats.inputBytes > 0 ? (double)savedBytes * 100.0 / (double)stats.inputBytes : 0.0;
+					ImGui::TextUnformatted("Run Results");
+					if (ImGui::BeginTable("CHDRunStats", 2, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_NoSavedSettings))
+					{
+						ImGui::TableNextColumn(); ImGui::TextUnformatted("Elapsed");
+						ImGui::TableNextColumn(); ImGui::TextUnformatted(formatDuration(stats.elapsedMs).c_str());
+						ImGui::TableNextColumn(); ImGui::TextUnformatted("Input Size");
+						ImGui::TableNextColumn(); ImGui::TextUnformatted(formatBytes(stats.inputBytes).c_str());
+						ImGui::TableNextColumn(); ImGui::TextUnformatted("Output Size");
+						ImGui::TableNextColumn(); ImGui::TextUnformatted(formatBytes(stats.outputBytes).c_str());
+						ImGui::TableNextColumn(); ImGui::TextUnformatted("Space Saved");
+						ImGui::TableNextColumn(); ImGui::TextUnformatted(strprintf("%s (%.2f%%)", formatBytes(savedBytes).c_str(), savedPct).c_str());
+						ImGui::TableNextColumn(); ImGui::TextUnformatted("Succeeded");
+						ImGui::TableNextColumn(); ImGui::TextUnformatted(strprintf("%d", stats.ok).c_str());
+						ImGui::TableNextColumn(); ImGui::TextUnformatted("Skipped");
+						ImGui::TableNextColumn(); ImGui::TextUnformatted(strprintf("%d", stats.skipped).c_str());
+						ImGui::TableNextColumn(); ImGui::TextUnformatted("Failed");
+						ImGui::TableNextColumn(); ImGui::TextUnformatted(strprintf("%d", std::max(0, stats.total - stats.ok - stats.skipped)).c_str());
+						ImGui::EndTable();
+					}
 				}
 			}
 		}

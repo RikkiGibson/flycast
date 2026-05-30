@@ -36,55 +36,28 @@
 #include <limits>
 #include <string>
 
-#include <stdio.h>  // for fileno
-#ifdef _WIN32
-#include <io.h> // for _chsize_s
-#else
-#include <unistd.h> // for ftruncate
-#endif
-
-
 namespace {
 
-#ifdef _WIN32
-static bool seek_file(FILE *file, std::uint64_t offset) noexcept
+static bool seek_file(hostfs::File *file, std::uint64_t offset) noexcept
 {
-	return _fseeki64(file, static_cast<__int64>(offset), SEEK_SET) == 0;
+	return file->seek(offset, SEEK_SET) == 0;
 }
 
-static bool seek_file_end(FILE *file) noexcept
+static bool seek_file_end(hostfs::File *file) noexcept
 {
-	return _fseeki64(file, 0, SEEK_END) == 0;
+	return file->seek(0, SEEK_END) == 0;
 }
 
-static std::int64_t tell_file(FILE *file) noexcept
+static std::int64_t tell_file(hostfs::File *file) noexcept
 {
-	return _ftelli64(file);
+	return file->tell();
 }
-#else
-static bool seek_file(FILE *file, std::uint64_t offset) noexcept
-{
-	if (std::numeric_limits<long>::max() < offset)
-		return false;
-	return std::fseek(file, offset, SEEK_SET) == 0;
-}
-
-static bool seek_file_end(FILE *file) noexcept
-{
-	return std::fseek(file, 0, SEEK_END) == 0;
-}
-
-static std::int64_t tell_file(FILE *file) noexcept
-{
-	return std::ftell(file);
-}
-#endif
 
 class std_osd_file : public osd_file
 {
 public:
 
-	std_osd_file(FILE *f, std::string path) noexcept : m_file(f), m_path(std::move(path))
+	std_osd_file(hostfs::File *f, std::string path) noexcept : m_file(f), m_path(std::move(path))
 	{
 		assert(m_file);
 	}
@@ -97,7 +70,7 @@ public:
 	{
 		// close the file handle
 		if (m_file)
-			std::fclose(m_file);
+			delete m_file;
 	}
 
 	//============================================================
@@ -114,10 +87,9 @@ public:
 		}
 
 		// perform the read
-		std::size_t const count = std::fread(buffer, 1, length, m_file);
-		if ((count < length) && std::ferror(m_file))
+		std::size_t const count = m_file->read(buffer, 1, length);
+		if ((count < length) && m_file->error())
 		{
-			std::clearerr(m_file);
 			ERROR_LOG(COMMON, "CHD stdfile read failed: path='%s' offset=%llu length=%u errno=%d",
 				m_path.c_str(), (unsigned long long)offset, length, errno);
 			return std::error_condition(errno, std::generic_category());
@@ -141,10 +113,9 @@ public:
 		}
 
 		// perform the write
-		std::size_t const count = std::fwrite(buffer, 1, length, m_file);
+		std::size_t const count = m_file->write(buffer, 1, length);
 		if (count < length)
 		{
-			std::clearerr(m_file);
 			ERROR_LOG(COMMON, "CHD stdfile write failed: path='%s' offset=%llu length=%u errno=%d",
 				m_path.c_str(), (unsigned long long)offset, length, errno);
 			return std::error_condition(errno, std::generic_category());
@@ -160,21 +131,12 @@ public:
 
 	virtual std::error_condition truncate(std::uint64_t offset) noexcept override
 	{
-#ifdef _WIN32
-		if (_chsize_s(_fileno(m_file), offset) < 0)
+		if (m_file->truncate(offset) < 0)
 		{
 			ERROR_LOG(COMMON, "CHD stdfile truncate failed: path='%s' offset=%llu errno=%d",
 				m_path.c_str(), (unsigned long long)offset, errno);
 			return std::error_condition(errno, std::generic_category());
 		}
-#else
-		if (::ftruncate(::fileno(m_file), offset) < 0)
-		{
-			ERROR_LOG(COMMON, "CHD stdfile truncate failed: path='%s' offset=%llu errno=%d",
-				m_path.c_str(), (unsigned long long)offset, errno);
-			return std::error_condition(errno, std::generic_category());
-		}
-#endif
 		return std::error_condition();
 	}
 
@@ -184,14 +146,14 @@ public:
 
 	virtual std::error_condition flush() noexcept override
 	{
-		if (!std::fflush(m_file))
+		if (!m_file->flush())
 			return std::error_condition();
 		else
 			return std::error_condition(errno, std::generic_category());
 	}
 
 private:
-	FILE *m_file;
+	hostfs::File *m_file;
 	std::string m_path;
 };
 
@@ -219,7 +181,7 @@ std::error_condition osd_file::open(std::string const &path, std::uint32_t openf
 		return std::errc::invalid_argument;
 
 	// open the file
-	FILE *const fileptr = hostfs::storage().openFile(path, mode);
+	hostfs::File *const fileptr = hostfs::storage().openFile(path, mode);
 	if (!fileptr)
 	{
 		ERROR_LOG(COMMON, "CHD stdfile open failed: path='%s' mode='%s' errno=%d", path.c_str(), mode, errno);
@@ -231,14 +193,14 @@ std::error_condition osd_file::open(std::string const &path, std::uint32_t openf
 	{
 		std::error_condition err(errno, std::generic_category());
 		ERROR_LOG(COMMON, "CHD stdfile size probe failed: path='%s' mode='%s' errno=%d", path.c_str(), mode, errno);
-		std::fclose(fileptr);
+		delete fileptr;
 		return err;
 	}
 
 	osd_file::ptr result(new (std::nothrow) std_osd_file(fileptr, path));
 	if (!result)
 	{
-		std::fclose(fileptr);
+		delete fileptr;
 		return std::errc::not_enough_memory;
 	}
 	file = std::move(result);
@@ -307,13 +269,13 @@ osd::directory::entry::ptr osd_stat(const std::string &path)
 	result->type = osd::directory::entry::entry_type::NONE;
 	result->size = 0;
 
-	FILE *const f = hostfs::storage().openFile(path, "rb");
+	hostfs::File *const f = hostfs::storage().openFile(path, "rb");
 	if (f)
 	{
 		seek_file_end(f);
 		result->type = osd::directory::entry::entry_type::FILE;
 		result->size = tell_file(f);
-		std::fclose(f);
+		delete f;
 	}
 
 	return osd::directory::entry::ptr(result);
