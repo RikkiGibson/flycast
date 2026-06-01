@@ -18,12 +18,28 @@
  */
 #include "upstream/osd/osdcore.h"
 
+#include <algorithm>
 #include <atomic>
+#include <chrono>
+#include <condition_variable>
+#include <cstdint>
+#include <deque>
+#include <mutex>
 #include <new>
+#include <thread>
+#include <vector>
+
+int osd_num_processors = 0;
 
 struct osd_work_queue
 {
 	std::atomic<int> pending = 0;
+	std::mutex mutex;
+	std::condition_variable cond;
+	std::condition_variable idleCond;
+	std::deque<osd_work_item *> items;
+	std::vector<std::thread> workers;
+	bool stopping = false;
 };
 
 struct osd_work_item
@@ -33,12 +49,91 @@ struct osd_work_item
 	void *param = nullptr;
 	void *result = nullptr;
 	std::atomic<int> done = 0;
+	bool autoRelease = false;
+	std::mutex mutex;
+	std::condition_variable cond;
 };
+
+static std::chrono::milliseconds timeoutToMilliseconds(osd_ticks_t timeout)
+{
+	if (timeout == 0)
+		return std::chrono::milliseconds(0);
+	const osd_ticks_t ticksPerSecond = osd_ticks_per_second();
+	if (ticksPerSecond == 0)
+		return std::chrono::milliseconds(0);
+	return std::chrono::milliseconds((timeout * 1000 + ticksPerSecond - 1) / ticksPerSecond);
+}
+
+static unsigned workerCountForFlags(int flags)
+{
+	if (flags & WORK_QUEUE_FLAG_MULTI)
+	{
+		unsigned count = osd_num_processors > 0 ? (unsigned)osd_num_processors : std::thread::hardware_concurrency();
+		if (count == 0)
+			count = 1;
+		return std::min<unsigned>(count, WORK_MAX_THREADS);
+	}
+	if (flags & WORK_QUEUE_FLAG_IO)
+		return 1;
+	return 1;
+}
+
+static void runItem(osd_work_item *item, int threadid)
+{
+	item->result = item->callback ? item->callback(item->param, threadid) : nullptr;
+	item->done.store(1);
+	item->cond.notify_all();
+	if (item->queue)
+	{
+		item->queue->pending.fetch_sub(1);
+		item->queue->idleCond.notify_all();
+	}
+	if (item->autoRelease)
+		delete item;
+}
+
+static void workerThread(osd_work_queue *queue, int threadid)
+{
+	for (;;)
+	{
+		osd_work_item *item = nullptr;
+		{
+			std::unique_lock<std::mutex> lock(queue->mutex);
+			queue->cond.wait(lock, [&]() { return queue->stopping || !queue->items.empty(); });
+			if (queue->stopping && queue->items.empty())
+				return;
+			item = queue->items.front();
+			queue->items.pop_front();
+		}
+		runItem(item, threadid);
+	}
+}
 
 osd_work_queue *osd_work_queue_alloc(int flags)
 {
-	(void)flags;
-	return new (std::nothrow) osd_work_queue();
+	auto *queue = new (std::nothrow) osd_work_queue();
+	if (!queue)
+		return nullptr;
+
+	const unsigned workerCount = workerCountForFlags(flags);
+	try
+	{
+		for (unsigned i = 0; i < workerCount; ++i)
+			queue->workers.emplace_back(workerThread, queue, (int)i);
+	}
+	catch (...)
+	{
+		queue->stopping = true;
+		queue->cond.notify_all();
+		for (std::thread& worker : queue->workers)
+		{
+			if (worker.joinable())
+				worker.join();
+		}
+		delete queue;
+		return nullptr;
+	}
+	return queue;
 }
 
 int osd_work_queue_items(osd_work_queue *queue)
@@ -48,12 +143,29 @@ int osd_work_queue_items(osd_work_queue *queue)
 
 bool osd_work_queue_wait(osd_work_queue *queue, osd_ticks_t timeout)
 {
-	(void)timeout;
-	return !queue || queue->pending.load() == 0;
+	if (!queue)
+		return true;
+	std::unique_lock<std::mutex> lock(queue->mutex);
+	if (timeout == 0)
+		return queue->pending.load() == 0;
+	return queue->idleCond.wait_for(lock, timeoutToMilliseconds(timeout), [&]() { return queue->pending.load() == 0; });
 }
 
 void osd_work_queue_free(osd_work_queue *queue)
 {
+	if (!queue)
+		return;
+	osd_work_queue_wait(queue, 30 * osd_ticks_per_second());
+	{
+		std::lock_guard<std::mutex> lock(queue->mutex);
+		queue->stopping = true;
+	}
+	queue->cond.notify_all();
+	for (std::thread& worker : queue->workers)
+	{
+		if (worker.joinable())
+			worker.join();
+	}
 	delete queue;
 }
 
@@ -69,22 +181,26 @@ osd_work_item *osd_work_item_queue_multiple(osd_work_queue *queue, osd_work_call
 		item->queue = queue;
 		item->callback = callback;
 		item->param = reinterpret_cast<std::uint8_t *>(parambase) + (paramstep * i);
+		item->autoRelease = (flags & WORK_ITEM_FLAG_AUTO_RELEASE) != 0;
 
 		if (queue)
 			queue->pending.fetch_add(1);
-		item->result = callback ? callback(item->param, 0) : nullptr;
-		item->done.store(1);
-		if (queue)
-			queue->pending.fetch_sub(1);
-
-		if (flags & WORK_ITEM_FLAG_AUTO_RELEASE)
+		if (!queue || queue->workers.empty())
 		{
-			delete item;
-			last = nullptr;
+			const bool autoRelease = item->autoRelease;
+			runItem(item, 0);
+			if (!autoRelease)
+				last = item;
 		}
 		else
 		{
-			last = item;
+			{
+				std::lock_guard<std::mutex> lock(queue->mutex);
+				queue->items.push_back(item);
+			}
+			queue->cond.notify_one();
+			if (!item->autoRelease)
+				last = item;
 		}
 	}
 	return last;
@@ -92,8 +208,12 @@ osd_work_item *osd_work_item_queue_multiple(osd_work_queue *queue, osd_work_call
 
 bool osd_work_item_wait(osd_work_item *item, osd_ticks_t timeout)
 {
-	(void)timeout;
-	return !item || item->done.load() != 0;
+	if (!item)
+		return true;
+	std::unique_lock<std::mutex> lock(item->mutex);
+	if (timeout == 0)
+		return item->done.load() != 0;
+	return item->cond.wait_for(lock, timeoutToMilliseconds(timeout), [&]() { return item->done.load() != 0; });
 }
 
 void *osd_work_item_result(osd_work_item *item)
@@ -103,5 +223,7 @@ void *osd_work_item_result(osd_work_item *item)
 
 void osd_work_item_release(osd_work_item *item)
 {
+	if (item)
+		osd_work_item_wait(item, 30 * osd_ticks_per_second());
 	delete item;
 }
