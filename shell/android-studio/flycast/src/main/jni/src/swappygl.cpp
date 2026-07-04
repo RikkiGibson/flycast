@@ -1,5 +1,6 @@
 /*
 	Copyright 2026 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -19,6 +20,7 @@
 #include "types.h"
 #include "wsi/egl.h"
 #include "cfg/option.h"
+#include "ui/gui.h"
 #include "jni_util.h"
 #ifdef SWAPPY
 
@@ -85,7 +87,10 @@ void SwappyGLGC::swap()
 	activate(config::FramePacing);
 	do_swap_automation();
 	changeSwapInterval();
-	if (swapOnVSync && swappyAvailable)
+	// The Android CHD/settings UI can repaint aggressively during long-running
+	// jobs. On affected Adreno devices, routing those pure ImGui frames through
+	// SwappyGL has been unstable, while plain EGL swaps remain reliable.
+	if (swapOnVSync && swappyAvailable && !gui_is_open())
 		SwappyGL_swap(display, surface);
 	else
 		eglSwapBuffers(display, surface);

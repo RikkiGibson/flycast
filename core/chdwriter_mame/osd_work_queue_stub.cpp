@@ -71,23 +71,41 @@ static unsigned workerCountForFlags(int flags)
 		unsigned count = osd_num_processors > 0 ? (unsigned)osd_num_processors : std::thread::hardware_concurrency();
 		if (count == 0)
 			count = 1;
+#ifdef __ANDROID__
+		// CHD codecs allocate per worker. Mobile devices can report many cores,
+		// but running a compressor on nearly all of them can exhaust native heap
+		// during FLAC/LZMA-heavy batches before CPU scheduling becomes the limit.
+		if (count > 1)
+			count -= 1;
+		count = std::min<unsigned>(count, 8);
+#endif
 		return std::min<unsigned>(count, WORK_MAX_THREADS);
 	}
 	if (flags & WORK_QUEUE_FLAG_IO)
+	{
+#ifdef __ANDROID__
+		// One read worker restores read/compress overlap for SAF paths. More
+		// than one can race CHD's shared read offset and stall early in a run.
 		return 1;
+#else
+		return 1;
+#endif
+	}
 	return 1;
 }
 
 static void runItem(osd_work_item *item, int threadid)
 {
 	item->result = item->callback ? item->callback(item->param, threadid) : nullptr;
-	item->done.store(1);
-	item->cond.notify_all();
 	if (item->queue)
 	{
 		item->queue->pending.fetch_sub(1);
 		item->queue->idleCond.notify_all();
 	}
+	// Publish completion last. Waiters may release non-auto items immediately
+	// after this flag flips, so the worker must not touch the item afterward.
+	item->done.store(1);
+	item->cond.notify_all();
 	if (item->autoRelease)
 		delete item;
 }

@@ -581,7 +581,13 @@ private:
 	std::error_condition    m_read_error;       // error during reading, if any
 
 	// work item thread
+#ifdef __ANDROID__
+	// Android conversions run beside the live GL UI and SAF storage. Keep the
+	// CHD staging buffers smaller there to leave native memory for rendering.
+	static constexpr int WORK_BUFFER_HUNKS = 128;
+#else
 	static constexpr int WORK_BUFFER_HUNKS = 256;
+#endif
 	osd_work_queue *        m_work_queue;       // queue for doing work on other threads
 	std::vector<uint8_t>    m_work_buffer;      // buffer containing hunk data to work on
 	std::vector<uint8_t>    m_compressed_buffer;// buffer containing compressed data

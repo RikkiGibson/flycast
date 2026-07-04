@@ -42,6 +42,8 @@ public:
 		jgetSubPath = env->GetMethodID(clazz, "getSubPath", "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;");
 		jgetFileInfo = env->GetMethodID(clazz, "getFileInfo", "(Ljava/lang/String;)Lcom/flycast/emulator/FileInfo;");
 		jexists = env->GetMethodID(clazz, "exists", "(Ljava/lang/String;)Z");
+		jdeleteDocument = env->GetMethodID(clazz, "deleteDocument", "(Ljava/lang/String;)Z");
+		jrenameDocument = env->GetMethodID(clazz, "renameDocument", "(Ljava/lang/String;Ljava/lang/String;)Z");
 		jaddStorage = env->GetMethodID(clazz, "addStorage", "(ZZLjava/lang/String;Ljava/lang/String;)Z");
 		jsaveScreenshot = env->GetMethodID(clazz, "saveScreenshot", "(Ljava/lang/String;[B)V");
 		jimportHomeDirectory = env->GetMethodID(clazz, "importHomeDirectory", "()V");
@@ -169,6 +171,42 @@ public:
 		}
 	}
 
+	int removeFile(const std::string& uri) override
+	{
+		NOTICE_LOG(COMMON, "AndroidStorage delete begin: uri='%s'", uri.c_str());
+		jni::String juri(uri);
+		bool ret = jni::env()->CallBooleanMethod(jstorage, jdeleteDocument, (jstring)juri);
+		try {
+			checkException();
+			NOTICE_LOG(COMMON, "AndroidStorage delete finished: uri='%s' success=%d", uri.c_str(), ret ? 1 : 0);
+		} catch (...) {
+			WARN_LOG(COMMON, "AndroidStorage delete failed: uri='%s'", uri.c_str());
+			ret = false;
+		}
+		if (!ret)
+			errno = EACCES;
+		return ret ? 0 : -1;
+	}
+
+	int renameFile(const std::string& oldUri, const std::string& newUri) override
+	{
+		NOTICE_LOG(COMMON, "AndroidStorage rename begin: old='%s' new='%s'", oldUri.c_str(), newUri.c_str());
+		jni::String joldUri(oldUri);
+		jni::String jnewUri(newUri);
+		bool ret = jni::env()->CallBooleanMethod(jstorage, jrenameDocument, (jstring)joldUri, (jstring)jnewUri);
+		try {
+			checkException();
+			NOTICE_LOG(COMMON, "AndroidStorage rename finished: old='%s' new='%s' success=%d",
+				oldUri.c_str(), newUri.c_str(), ret ? 1 : 0);
+		} catch (...) {
+			WARN_LOG(COMMON, "AndroidStorage rename failed: old='%s' new='%s'", oldUri.c_str(), newUri.c_str());
+			ret = false;
+		}
+		if (!ret)
+			errno = EACCES;
+		return ret ? 0 : -1;
+	}
+
 	bool addStorage(bool isDirectory, bool writeAccess, const std::string& description,
 			void (*callback)(bool cancelled, std::string selectedPath), const std::string& mimeType) override
 	{
@@ -264,6 +302,8 @@ private:
 	jmethodID jgetSubPath;
 	jmethodID jgetFileInfo;
 	jmethodID jexists;
+	jmethodID jdeleteDocument;
+	jmethodID jrenameDocument;
 	jmethodID jsaveScreenshot;
 	jmethodID jexportHomeDirectory;
 	jmethodID jimportHomeDirectory;

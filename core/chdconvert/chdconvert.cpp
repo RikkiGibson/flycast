@@ -137,6 +137,25 @@ static bool isPreferredRootImage(const std::string& ext)
 	return ext == "gdi" || ext == "cue" || ext == "iso";
 }
 
+static std::string findCueForBin(const std::string& binPath, const std::string& binName)
+{
+	const std::string parent = hostfs::storage().getParentPath(binPath);
+	const std::string matchingCuePath = hostfs::storage().getSubPath(parent, get_file_basename(binName) + ".cue");
+	if (hostfs::storage().exists(matchingCuePath))
+		return matchingCuePath;
+
+	std::string onlyCuePath;
+	int cueCount = 0;
+	for (const hostfs::FileInfo& entry : hostfs::storage().listContent(parent))
+	{
+		if (entry.isDirectory || extensionFromNameOrPath(entry.name, entry.path) != "cue")
+			continue;
+		onlyCuePath = entry.path;
+		cueCount++;
+	}
+	return cueCount == 1 ? onlyCuePath : "";
+}
+
 static void addWriterNote(SourceProbe& probe)
 {
 	probe.notes.push_back("Internal CHD conversion backend mode is enabled for this pass.");
@@ -238,9 +257,8 @@ static SourceProbe probeDirectory(const std::string& path)
 	probe.kind = kindForExtension(extensionFromNameOrPath(candidateInfo.name, candidate));
 	if (probe.kind == SourceKind::Unknown && extensionFromNameOrPath(candidateInfo.name, candidate) == "bin")
 	{
-		const std::string cuePath = hostfs::storage().getSubPath(hostfs::storage().getParentPath(candidate),
-			get_file_basename(candidateInfo.name) + ".cue");
-		if (hostfs::storage().exists(cuePath))
+		const std::string cuePath = findCueForBin(candidate, candidateInfo.name);
+		if (!cuePath.empty())
 		{
 			probe.primaryFile = cuePath;
 			probe.kind = SourceKind::CueBin;
@@ -316,9 +334,8 @@ SourceProbe probeSource(const std::string& path)
 
 		if (probe.kind == SourceKind::Unknown && ext == "bin")
 		{
-			const std::string parent = hostfs::storage().getParentPath(probe.sourcePath);
-			const std::string cuePath = hostfs::storage().getSubPath(parent, get_file_basename(info.name) + ".cue");
-			if (hostfs::storage().exists(cuePath))
+			const std::string cuePath = findCueForBin(probe.sourcePath, info.name);
+			if (!cuePath.empty())
 			{
 				probe.kind = SourceKind::CueBin;
 				probe.primaryFile = cuePath;
@@ -389,6 +406,13 @@ ConversionResult runSingleConversion(const std::string& path, const ConversionOp
 	ConversionResult result;
 	try
 	{
+		if (options.cancelCallback && options.cancelCallback())
+		{
+			result.exitCode = -4;
+			result.message = "Conversion cancelled.";
+			return result;
+		}
+
 		result.sourcePath = normalizeInputPath(path);
 		NOTICE_LOG(COMMON, "CHD convert start: requested='%s' outputDirectory='%s'",
 			result.sourcePath.c_str(), options.outputDirectory.c_str());
@@ -426,8 +450,8 @@ ConversionResult runSingleConversion(const std::string& path, const ConversionOp
 
 		std::string error;
 		result.success = chdwriter_mame::runConversion(mode, plan.probe.primaryFile, result.outputPath, error,
-			options.progressCallback, compressionProfile);
-		result.exitCode = result.success ? 0 : -2;
+			options.progressCallback, compressionProfile, options.cancelCallback);
+		result.exitCode = result.success ? 0 : (options.cancelCallback && options.cancelCallback() ? -4 : -2);
 		result.message = result.success
 			? strprintf("Conversion complete: %s", result.outputPath.c_str())
 			: (error.empty() ? "Internal CHD conversion failed." : error);

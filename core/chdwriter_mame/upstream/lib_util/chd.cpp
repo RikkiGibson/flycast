@@ -3034,11 +3034,14 @@ void chd_file_compressor::compress_begin()
 		item.m_hash.resize(hunk_bytes() / unit_bytes());
 	}
 
-	// initialize codec instances
+	// Reset codec instances. They are allocated lazily per real worker thread
+	// in async_compress_hunk(). Android devices can report many possible worker
+	// slots, but eagerly allocating all codec groups can exhaust native memory
+	// even when the active CHD worker count is capped lower.
 	for (auto & elem : m_codecs)
 	{
 		delete elem;
-		elem = new chd_compressor_group(*this, m_compression);
+		elem = nullptr;
 	}
 
 	// reset write state
@@ -3273,6 +3276,8 @@ void chd_file_compressor::async_compress_hunk(work_item &item, int threadid)
 {
 	// use our thread's codec
 	assert(threadid < std::size(m_codecs));
+	if (m_codecs[threadid] == nullptr)
+		m_codecs[threadid] = new chd_compressor_group(*this, m_compression);
 	item.m_codecs = m_codecs[threadid];
 
 	// compute CRC-16 and SHA-1 hashes

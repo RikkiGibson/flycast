@@ -52,19 +52,11 @@ enum class ChdPage
 	Converter,
 };
 
-#ifdef __ANDROID__
-static constexpr std::array<const char*, 3> kScopes = {{
-	"Single ISO",
-	"Single ROM Folder",
-	"Whole Folder",
-}};
-#else
 static constexpr std::array<const char*, 3> kScopes = {{
 	"Single ROM",
 	"Single ROM Folder",
 	"Whole Folder",
 }};
-#endif
 static constexpr std::array<const char*, 4> kCompressionProfiles = {{
 	"Fast",
 	"Balanced / Recommended",
@@ -100,6 +92,7 @@ static std::atomic<int> s_conversionTotal(0);
 static std::atomic<int> s_conversionDone(0);
 static std::atomic<int> s_conversionOk(0);
 static std::atomic<int> s_conversionSkipped(0);
+static std::atomic<bool> s_cancelRequested(false);
 static std::mutex s_conversionMutex;
 static std::future<void> s_conversionFuture;
 static std::string s_conversionPhase;
@@ -194,7 +187,45 @@ static void pollConversionWorker()
 		return;
 	if (s_conversionFuture.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
 		return;
-	s_conversionFuture.get();
+	try
+	{
+		s_conversionFuture.get();
+	}
+	catch (const std::exception& e)
+	{
+		const std::string message = strprintf("Conversion worker ended with an error: %s", e.what());
+		std::lock_guard<std::mutex> lock(s_conversionMutex);
+		s_conversionPhase = "Conversion stopped.";
+		s_pendingStatusUpdate = message;
+		s_conversionRunning.store(false);
+	}
+	catch (...)
+	{
+		std::lock_guard<std::mutex> lock(s_conversionMutex);
+		s_conversionPhase = "Conversion stopped.";
+		s_pendingStatusUpdate = "Conversion worker ended with an unknown error.";
+		s_conversionRunning.store(false);
+	}
+}
+
+static bool conversionCancelled()
+{
+	return s_cancelRequested.load();
+}
+
+static void addTrace(const std::string& stage, const std::string& message);
+
+static void markConversionCancelled(const char *kind)
+{
+	const std::string message = strprintf("%s cancelled.", kind);
+	{
+		std::lock_guard<std::mutex> lock(s_conversionMutex);
+		s_conversionPhase = message;
+		s_pendingStatusUpdate = message;
+		s_lastRunStats.active = false;
+		s_lastRunStats.complete = false;
+	}
+	addTrace("CANCEL", message);
 }
 
 static std::string traceTimestamp()
@@ -282,11 +313,6 @@ static std::string fileNameForUi(const std::string& path)
 	}
 	const size_t separator = path.find_last_of("/\\");
 	return separator == std::string::npos ? path : path.substr(separator + 1);
-}
-
-static bool isContentUriPath(const std::string& path)
-{
-	return path.rfind("content://", 0) == 0;
 }
 
 static std::string outputPathForSource(const std::string& sourcePath, const std::string& outputDirectory, const std::string& outputFileSuffix = {})
@@ -571,11 +597,7 @@ static const char* scopeDescription(int scope)
 	switch (std::clamp(scope, 0, (int)kScopes.size() - 1))
 	{
 	case 0:
-#ifdef __ANDROID__
-		return "Pick one .iso file. Use Single ROM Folder for .cue/.bin and .gdi sets on Android.";
-#else
 		return "Pick one .iso, .cue, or .gdi file. Companion track files are resolved from the same folder.";
-#endif
 	case 1:
 		return "Pick one game folder and convert the first supported ROM set found inside it.";
 	case 2:
@@ -591,10 +613,6 @@ static std::vector<std::string> collectSourcesForScope(const std::string& path, 
 	const chdconvert::ConversionPlan plan = chdconvert::planConversion(path);
 	if (normalizedScope == 0)
 	{
-#ifdef __ANDROID__
-		if (plan.probe.kind != chdconvert::SourceKind::Iso)
-			return {};
-#endif
 		if (plan.canRunNow)
 			return { plan.probe.primaryFile };
 		return {};
@@ -664,6 +682,7 @@ static void startAsyncConversion(const std::vector<std::string>& sources, const 
 		WARN_LOG(COMMON, "CHD UI run rejected: conversion already running");
 		return;
 	}
+	s_cancelRequested.store(false);
 	s_conversionRunning.store(true);
 	s_conversionTotal.store((int)sources.size());
 	s_conversionDone.store(0);
@@ -691,6 +710,7 @@ static void startAsyncConversion(const std::vector<std::string>& sources, const 
 			chdconvert::ConversionOptions options;
 			options.outputDirectory = outputDirectory;
 			options.compressionProfile = compressionProfile;
+			options.cancelCallback = conversionCancelled;
 			const auto runStart = std::chrono::steady_clock::now();
 			uint64_t inputBytesTotal = 0;
 			uint64_t outputBytesTotal = 0;
@@ -713,6 +733,8 @@ static void startAsyncConversion(const std::vector<std::string>& sources, const 
 
 			for (size_t i = 0; i < sources.size(); i++)
 			{
+				if (conversionCancelled())
+					break;
 				const std::string phase = strprintf("Running %d/%d: %s", (int)i + 1, (int)sources.size(), sources[i].c_str());
 				{
 					std::lock_guard<std::mutex> lock(s_conversionMutex);
@@ -763,7 +785,7 @@ static void startAsyncConversion(const std::vector<std::string>& sources, const 
 				}
 				else
 				{
-					addTrace("FAIL", result.message);
+					addTrace(conversionCancelled() ? "CANCEL" : "FAIL", result.message);
 				}
 				s_conversionDone.fetch_add(1);
 				std::lock_guard<std::mutex> lock(s_conversionMutex);
@@ -771,6 +793,8 @@ static void startAsyncConversion(const std::vector<std::string>& sources, const 
 				if (!result.commandLine.empty())
 					s_pendingCommandUpdate = result.commandLine;
 				s_pendingStatusUpdate = finalStatusMessage;
+				if (conversionCancelled())
+					break;
 			}
 
 			const int ok = s_conversionOk.load();
@@ -779,6 +803,12 @@ static void startAsyncConversion(const std::vector<std::string>& sources, const 
 			const int failed = std::max(0, total - ok - skipped);
 			const uint64_t elapsedMs = (uint64_t)std::chrono::duration_cast<std::chrono::milliseconds>(
 				std::chrono::steady_clock::now() - runStart).count();
+			if (conversionCancelled())
+			{
+				markConversionCancelled("Conversion");
+				s_conversionRunning.store(false);
+				return;
+			}
 			{
 				std::lock_guard<std::mutex> lock(s_conversionMutex);
 				s_conversionPhase = "Conversion complete.";
@@ -843,6 +873,7 @@ static void startAsyncBenchmark(const std::vector<std::string>& sources, const s
 		return;
 	}
 
+	s_cancelRequested.store(false);
 	s_conversionRunning.store(true);
 	s_conversionTotal.store((int)(sources.size() * kCompressionProfileValues.size()));
 	s_conversionDone.store(0);
@@ -889,6 +920,7 @@ static void startAsyncBenchmark(const std::vector<std::string>& sources, const s
 				options.outputDirectory = outputDirectory;
 				options.outputFileSuffix = suffix;
 				options.compressionProfile = profile;
+				options.cancelCallback = conversionCancelled;
 				options.progressCallback = [benchmarkStart](double complete, double ratio, const std::string& phase) {
 					const uint64_t elapsedMs = (uint64_t)std::chrono::duration_cast<std::chrono::milliseconds>(
 						std::chrono::steady_clock::now() - benchmarkStart).count();
@@ -903,6 +935,8 @@ static void startAsyncBenchmark(const std::vector<std::string>& sources, const s
 
 				for (size_t i = 0; i < sources.size(); i++)
 				{
+					if (conversionCancelled())
+						break;
 					const std::string phase = strprintf("Benchmark %s %d/%d: %s",
 						chdconvert::describeCompressionProfile(profile), (int)i + 1, (int)sources.size(), sources[i].c_str());
 					{
@@ -1019,7 +1053,7 @@ static void startAsyncBenchmark(const std::vector<std::string>& sources, const s
 					}
 					else
 					{
-						addTrace("FAIL", result.message);
+						addTrace(conversionCancelled() ? "CANCEL" : "FAIL", result.message);
 					}
 					itemStats.elapsedMs = (uint64_t)std::chrono::duration_cast<std::chrono::milliseconds>(
 						std::chrono::steady_clock::now() - itemStart).count();
@@ -1029,8 +1063,12 @@ static void startAsyncBenchmark(const std::vector<std::string>& sources, const s
 					if (!result.commandLine.empty())
 						s_pendingCommandUpdate = result.commandLine;
 					s_pendingStatusUpdate = result.message;
+					if (conversionCancelled())
+						break;
 				}
 
+				if (conversionCancelled())
+					break;
 				profileStats.elapsedMs = (uint64_t)std::chrono::duration_cast<std::chrono::milliseconds>(
 					std::chrono::steady_clock::now() - profileStart).count();
 				{
@@ -1051,6 +1089,12 @@ static void startAsyncBenchmark(const std::vector<std::string>& sources, const s
 			const int failed = std::max(0, total - ok - skipped);
 			const uint64_t elapsedMs = (uint64_t)std::chrono::duration_cast<std::chrono::milliseconds>(
 				std::chrono::steady_clock::now() - benchmarkStart).count();
+			if (conversionCancelled())
+			{
+				markConversionCancelled("Benchmark");
+				s_conversionRunning.store(false);
+				return;
+			}
 			{
 				std::lock_guard<std::mutex> lock(s_conversionMutex);
 				s_conversionPhase = "Benchmark complete.";
@@ -1237,7 +1281,7 @@ static void renderConverterTab()
 			ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_DragScrolling);
 		ImGui::TextUnformatted("Quick guide");
 		ImGui::Separator();
-		ImGui::BulletText("Single ISO: use for one .iso file.");
+		ImGui::BulletText("Single ROM: use for one .iso, .cue, or .gdi file.");
 		ImGui::BulletText("Single ROM Folder: use for one .cue/.bin or .gdi game folder.");
 		ImGui::BulletText("Whole Folder: scan a folder and convert every supported ROM set inside it.");
 		ImGui::BulletText("Preconvert check: preview what will run before you start the job.");
@@ -1277,12 +1321,7 @@ static void renderConverterTab()
 			startAsyncConversion(sources, s_outputPath, currentCompressionProfile());
 			if (sources.empty())
 			{
-#ifdef __ANDROID__
-				if (normalizedScope() == 0 && s_lastPlan.probe.kind != chdconvert::SourceKind::Iso)
-					setStatus("Single ISO mode only supports .iso on Android. Use Single ROM Folder for .cue/.bin or .gdi sets.");
-				else
-#endif
-					setStatus(s_lastPlan.probe.summary);
+				setStatus(s_lastPlan.probe.summary);
 			}
 		}
 		if (ImGui::Button("Benchmark all profiles", ImVec2(-1, uiScaled(34.0f))))
@@ -1295,6 +1334,15 @@ static void renderConverterTab()
 			startAsyncBenchmark(sources, s_outputPath);
 			if (sources.empty())
 				setStatus(s_lastPlan.probe.summary);
+		}
+
+		if (s_conversionRunning.load())
+		{
+			if (ImGui::Button("Cancel conversion", ImVec2(-1, uiScaled(34.0f))))
+			{
+				NOTICE_LOG(COMMON, "CHD UI action: Cancel conversion");
+				requestChdConversionCancel();
+			}
 		}
 
 		ImGui::TextWrapped("Benchmark all profiles creates one suffixed CHD per profile and reports speed, size, and saved-space efficiency.");
@@ -1563,6 +1611,40 @@ void renderChdSystemTab()
 
 	ImGui::Spacing();
 	ImGui::TextDisabled("Last active page: %s", pageName(s_page));
+}
+
+void requestChdConversionCancel()
+{
+	if (!s_conversionRunning.load())
+		return;
+	s_cancelRequested.store(true);
+	{
+		std::lock_guard<std::mutex> lock(s_conversionMutex);
+		s_conversionPhase = "Cancelling conversion...";
+		s_pendingStatusUpdate = "Cancelling conversion...";
+	}
+	addTrace("CANCEL", "Cancellation requested.");
+}
+
+void shutdownChdConversionWorker()
+{
+	if (!s_conversionFuture.valid())
+		return;
+
+	requestChdConversionCancel();
+	try
+	{
+		s_conversionFuture.get();
+	}
+	catch (const std::exception& e)
+	{
+		ERROR_LOG(COMMON, "CHD conversion shutdown caught worker exception: %s", e.what());
+	}
+	catch (...)
+	{
+		ERROR_LOG(COMMON, "CHD conversion shutdown caught unknown worker exception");
+	}
+	s_conversionRunning.store(false);
 }
 
 } // namespace SettingsNew

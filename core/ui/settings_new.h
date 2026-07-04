@@ -63,6 +63,8 @@ void renderControlsTab();
 void renderNetworkTab();
 void renderAdvancedTab();
 void renderChdSystemTab();
+void requestChdConversionCancel();
+void shutdownChdConversionWorker();
 void renderAboutTab();
 void focusBoxArtSection();
 void openTab(SettingsTab tab);

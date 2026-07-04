@@ -66,6 +66,7 @@ struct ConversionOptions
 	std::string outputDirectory;
 	std::string outputFileSuffix;
 	CompressionProfile compressionProfile = CompressionProfile::Balanced;
+	std::function<bool()> cancelCallback;
 	std::function<void(double complete, double ratio, const std::string& phase)> progressCallback;
 };
 

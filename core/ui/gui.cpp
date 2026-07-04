@@ -54,6 +54,7 @@
 #endif
 #include "vgamepad.h"
 #include "settings.h"
+#include "settings_new.h"
 #include "oslib/i18n.h"
 #include "gui_font.h"
 using namespace i18n;
@@ -1870,6 +1871,7 @@ void gui_term()
 	if (inited)
 	{
 		inited = false;
+		SettingsNew::shutdownChdConversionWorker();
 		scanner.stop();
 		clearThumbnailCache();
 		ImGui::DestroyContext();

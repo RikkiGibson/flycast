@@ -1,5 +1,6 @@
 /*
 	Copyright 2023 flyinghead
+	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of Flycast.
 
@@ -41,6 +42,8 @@ CustomStorage& customStorage()
 		std::string getSubPath(const std::string& reference, const std::string& relative) override { die("Not implemented"); }
 		FileInfo getFileInfo(const std::string& path) override { die("Not implemented"); }
 		bool exists(const std::string& path) override { die("Not implemented"); }
+		int removeFile(const std::string& path) override { die("Not implemented"); }
+		int renameFile(const std::string& oldPath, const std::string& newPath) override { die("Not implemented"); }
 		bool addStorage(bool isDirectory, bool writeAccess, const std::string& description,
 				void (*callback)(bool cancelled, std::string selectedPath), const std::string& mimeType) override {
 			die("Not implemented");
@@ -291,6 +294,16 @@ public:
 #endif
 	}
 
+	int removeFile(const std::string& path) override
+	{
+		return flycast::unlink(path.c_str());
+	}
+
+	int renameFile(const std::string& oldPath, const std::string& newPath) override
+	{
+		return flycast::rename(oldPath.c_str(), newPath.c_str());
+	}
+
 private:
 	std::vector<FileInfo> listRoots()
 	{
@@ -398,6 +411,22 @@ bool AllStorage::exists(const std::string& path)
 		return customStorage().exists(path);
 	else
 		return stdStorage.exists(path);
+}
+
+int AllStorage::removeFile(const std::string& path)
+{
+	if (customStorage().isKnownPath(path))
+		return customStorage().removeFile(path);
+	else
+		return stdStorage.removeFile(path);
+}
+
+int AllStorage::renameFile(const std::string& oldPath, const std::string& newPath)
+{
+	if (customStorage().isKnownPath(oldPath) || customStorage().isKnownPath(newPath))
+		return customStorage().renameFile(oldPath, newPath);
+	else
+		return stdStorage.renameFile(oldPath, newPath);
 }
 
 std::string AllStorage::getDefaultDirectory()

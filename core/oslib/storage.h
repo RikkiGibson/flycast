@@ -164,6 +164,8 @@ public:
 	virtual std::string getSubPath(const std::string& reference, const std::string& subpath) = 0;
 	virtual FileInfo getFileInfo(const std::string& path) = 0;
 	virtual bool exists(const std::string& path) = 0;
+	virtual int removeFile(const std::string& path) = 0;
+	virtual int renameFile(const std::string& oldPath, const std::string& newPath) = 0;
 
 	virtual ~Storage() = default;
 };
@@ -186,6 +188,8 @@ public:
 	std::string getSubPath(const std::string& reference, const std::string& subpath) override;
 	FileInfo getFileInfo(const std::string& path) override;
 	bool exists(const std::string& path) override;
+	int removeFile(const std::string& path) override;
+	int renameFile(const std::string& oldPath, const std::string& newPath) override;
 	std::string getDefaultDirectory();
 };
 

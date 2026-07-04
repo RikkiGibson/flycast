@@ -19,17 +19,21 @@
 #include "chdwriter_bridge.h"
 
 #include "log/Log.h"
+#include "oslib/directory.h"
+#include "oslib/storage.h"
 #include "upstream/lib_util/cdrom.h"
 #include "upstream/lib_util/chd.h"
 #include "upstream/lib_util/corefile.h"
 #include "upstream/osd/osdfile.h"
 
 #include <algorithm>
+#include <cerrno>
 #include <cstdint>
 #include <cstring>
 #include <cstdio>
 #include <limits>
 #include <memory>
+#include <string>
 #include <system_error>
 #include <tuple>
 
@@ -46,6 +50,23 @@ static CompressionStack compressionStackForProfile(Mode mode, CompressionProfile
 {
 	if (mode == Mode::CreateCd)
 	{
+#ifdef __ANDROID__
+		// Android keeps real archive profiles through LZMA/ZSTD/ZLIB, but skips
+		// CD FLAC: its encoder allocates large aligned buffers per active worker
+		// and can OOM mid-benchmark on mobile even after lazy codec allocation.
+		switch (profile)
+		{
+		case CompressionProfile::Fast:
+			return { { CHD_CODEC_CD_ZLIB, CHD_CODEC_NONE, CHD_CODEC_NONE, CHD_CODEC_NONE }, "cdzl" };
+		case CompressionProfile::Balanced:
+			return { { CHD_CODEC_CD_ZSTD, CHD_CODEC_NONE, CHD_CODEC_NONE, CHD_CODEC_NONE }, "cdzs" };
+		case CompressionProfile::HighCompression:
+			return { { CHD_CODEC_CD_LZMA, CHD_CODEC_CD_ZLIB, CHD_CODEC_NONE, CHD_CODEC_NONE }, "cdlz,cdzl" };
+		case CompressionProfile::MaxArchive:
+			return { { CHD_CODEC_CD_LZMA, CHD_CODEC_CD_ZSTD, CHD_CODEC_CD_ZLIB, CHD_CODEC_NONE }, "cdlz,cdzs,cdzl" };
+		}
+		return { { CHD_CODEC_CD_ZSTD, CHD_CODEC_NONE, CHD_CODEC_NONE, CHD_CODEC_NONE }, "cdzs" };
+#else
 		switch (profile)
 		{
 		case CompressionProfile::Fast:
@@ -58,6 +79,7 @@ static CompressionStack compressionStackForProfile(Mode mode, CompressionProfile
 			return { { CHD_CODEC_CD_LZMA, CHD_CODEC_CD_ZSTD, CHD_CODEC_CD_ZLIB, CHD_CODEC_CD_FLAC }, "cdlz,cdzs,cdzl,cdfl" };
 		}
 		return { { CHD_CODEC_CD_ZSTD, CHD_CODEC_CD_ZLIB, CHD_CODEC_CD_FLAC, CHD_CODEC_NONE }, "cdzs,cdzl,cdfl" };
+#endif
 	}
 
 	switch (profile)
@@ -71,11 +93,74 @@ static CompressionStack compressionStackForProfile(Mode mode, CompressionProfile
 	return { { CHD_CODEC_ZLIB, CHD_CODEC_HUFFMAN, CHD_CODEC_NONE, CHD_CODEC_NONE }, "zlib,huff" };
 }
 
+static std::string pendingOutputPathFor(const std::string& outputPath)
+{
+	// Keep incomplete conversions invisible to ROM scanners until the CHD closes cleanly and is renamed.
+	return outputPath + ".hcpart";
+}
+
+static bool pathExists(const std::string& path)
+{
+	try {
+		return hostfs::storage().exists(path);
+	} catch (...) {
+		return false;
+	}
+}
+
+static std::string errnoMessage(const char *action, const std::string& path)
+{
+	return std::string(action) + " '" + path + "': " + std::strerror(errno);
+}
+
+static bool removePendingOutput(const std::string& pendingOutputPath, std::string& errorMessage)
+{
+	if (!pathExists(pendingOutputPath))
+		return true;
+	if (hostfs::storage().removeFile(pendingOutputPath) == 0)
+		return true;
+
+	errorMessage = errnoMessage("Unable to remove incomplete CHD", pendingOutputPath);
+	return false;
+}
+
+static bool preparePendingOutput(const std::string& outputPath, const std::string& pendingOutputPath, std::string& errorMessage)
+{
+	if (pathExists(outputPath))
+	{
+		errorMessage = "Output file already exists.";
+		return false;
+	}
+	return removePendingOutput(pendingOutputPath, errorMessage);
+}
+
+static bool publishPendingOutput(const std::string& pendingOutputPath, const std::string& outputPath, std::string& errorMessage)
+{
+	if (pathExists(outputPath))
+	{
+		errorMessage = "Output file already exists.";
+		std::string cleanupError;
+		removePendingOutput(pendingOutputPath, cleanupError);
+		return false;
+	}
+	if (hostfs::storage().renameFile(pendingOutputPath, outputPath) == 0)
+		return true;
+
+	errorMessage = errnoMessage("Unable to finalize CHD", outputPath);
+	std::string cleanupError;
+	removePendingOutput(pendingOutputPath, cleanupError);
+	return false;
+}
+
 class rawfile_compressor : public chd_file_compressor
 {
 public:
-	rawfile_compressor(util::random_read &file, std::uint64_t offset = 0, std::uint64_t maxoffset = std::numeric_limits<std::uint64_t>::max())
+	rawfile_compressor(util::random_read &file,
+		const std::function<bool()>& cancelCallback,
+		std::uint64_t offset = 0,
+		std::uint64_t maxoffset = std::numeric_limits<std::uint64_t>::max())
 		: m_file(file)
+		, m_cancelCallback(cancelCallback)
 		, m_offset(offset)
 	{
 		std::uint64_t filelen = 0;
@@ -87,6 +172,8 @@ public:
 
 	virtual std::uint32_t read_data(void *dest, std::uint64_t offset, std::uint32_t length) override
 	{
+		if (m_cancelCallback && m_cancelCallback())
+			throw std::make_error_condition(std::errc::operation_canceled);
 		offset += m_offset;
 		if (offset >= m_maxoffset)
 			return 0;
@@ -116,6 +203,7 @@ public:
 
 private:
 	util::random_read& m_file;
+	std::function<bool()> m_cancelCallback;
 	std::uint64_t m_offset;
 	std::uint64_t m_maxoffset;
 };
@@ -123,14 +211,18 @@ private:
 class cd_compressor : public chd_file_compressor
 {
 public:
-	cd_compressor(cdrom_file::toc &toc, cdrom_file::track_input_info &info)
+	cd_compressor(cdrom_file::toc &toc, cdrom_file::track_input_info &info,
+		const std::function<bool()>& cancelCallback)
 		: m_toc(toc)
 		, m_info(info)
+		, m_cancelCallback(cancelCallback)
 	{
 	}
 
 	virtual uint32_t read_data(void *_dest, uint64_t offset, uint32_t length) override
 	{
+		if (m_cancelCallback && m_cancelCallback())
+			throw std::make_error_condition(std::errc::operation_canceled);
 		if (!m_loggedFirstRead)
 		{
 			m_loggedFirstRead = true;
@@ -175,6 +267,8 @@ public:
 
 			while (length_remaining != 0 && offset < endoffs)
 			{
+				if (m_cancelCallback && m_cancelCallback())
+					throw std::make_error_condition(std::errc::operation_canceled);
 				const uint64_t src_frame_start = src_track_start + ((offset - startoffs) / cdrom_file::FRAME_SIZE) * bytesperframe;
 				if (src_frame_start >= split_or_max
 					&& src_frame_start < src_track_end
@@ -240,6 +334,7 @@ private:
 	util::core_file::ptr m_file;
 	cdrom_file::toc& m_toc;
 	cdrom_file::track_input_info& m_info;
+	std::function<bool()> m_cancelCallback;
 };
 
 static std::error_condition create_output_chd(
@@ -254,7 +349,8 @@ static std::error_condition create_output_chd(
 }
 
 static std::error_condition run_compression(chd_file_compressor &chd,
-	const std::function<void(double complete, double ratio, const std::string& phase)>& progressCallback)
+	const std::function<void(double complete, double ratio, const std::string& phase)>& progressCallback,
+	const std::function<bool()>& cancelCallback)
 {
 	NOTICE_LOG(COMMON, "CHD compression begin");
 	chd.compress_begin();
@@ -262,10 +358,22 @@ static std::error_condition run_compression(chd_file_compressor &chd,
 	double ratio = 0.0;
 	std::error_condition err;
 	unsigned iteration = 0;
+	bool cancelLogged = false;
 	if (progressCallback)
 		progressCallback(complete, ratio, "Starting compression...");
 	while ((err = chd.compress_continue(complete, ratio)) == chd_file::error::WALKING_PARENT || err == chd_file::error::COMPRESSING)
 	{
+		if (cancelCallback && cancelCallback())
+		{
+			if (!cancelLogged)
+			{
+				cancelLogged = true;
+				NOTICE_LOG(COMMON, "CHD compression cancellation pending: iteration=%u complete=%.4f ratio=%.4f",
+					iteration, complete, ratio);
+			}
+			if (progressCallback)
+				progressCallback(complete, ratio, "Cancelling conversion...");
+		}
 		++iteration;
 		if (iteration <= 4 || (iteration % 128) == 0)
 		{
@@ -316,7 +424,8 @@ static std::error_condition write_cd_metadata(chd_file *chd, const cdrom_file::t
 
 static bool runCdConversion(const std::string& inputPath, const std::string& outputPath, std::string& errorMessage,
 	CompressionProfile compressionProfile,
-	const std::function<void(double complete, double ratio, const std::string& phase)>& progressCallback)
+	const std::function<void(double complete, double ratio, const std::string& phase)>& progressCallback,
+	const std::function<bool()>& cancelCallback)
 {
 	NOTICE_LOG(COMMON, "CHD CD conversion begin: input='%s' output='%s' compression='%s'",
 		inputPath.c_str(), outputPath.c_str(), describeCompressionStack(Mode::CreateCd, compressionProfile));
@@ -344,12 +453,22 @@ static bool runCdConversion(const std::string& inputPath, const std::string& out
 
 	const uint32_t hunk_size = cdrom_file::FRAMES_PER_HUNK * cdrom_file::FRAME_SIZE;
 	const CompressionStack compression = compressionStackForProfile(Mode::CreateCd, compressionProfile);
-	auto chd = std::make_unique<cd_compressor>(toc, track_info);
-	err = create_output_chd(*chd, outputPath, (uint64_t)totalSectors * cdrom_file::FRAME_SIZE, hunk_size, cdrom_file::FRAME_SIZE, compression.codecs);
+	const std::string pendingOutputPath = pendingOutputPathFor(outputPath);
+	if (!preparePendingOutput(outputPath, pendingOutputPath, errorMessage))
+	{
+		ERROR_LOG(COMMON, "CHD CD conversion output prepare failed: output='%s' pending='%s' message='%s'",
+			outputPath.c_str(), pendingOutputPath.c_str(), errorMessage.c_str());
+		return false;
+	}
+	auto chd = std::make_unique<cd_compressor>(toc, track_info, cancelCallback);
+	err = create_output_chd(*chd, pendingOutputPath, (uint64_t)totalSectors * cdrom_file::FRAME_SIZE, hunk_size, cdrom_file::FRAME_SIZE, compression.codecs);
 	if (err)
 	{
 		errorMessage = err.message();
-		ERROR_LOG(COMMON, "CHD CD conversion create failed: output='%s' message='%s'", outputPath.c_str(), errorMessage.c_str());
+		chd.reset();
+		removePendingOutput(pendingOutputPath, errorMessage);
+		ERROR_LOG(COMMON, "CHD CD conversion create failed: output='%s' pending='%s' message='%s'",
+			outputPath.c_str(), pendingOutputPath.c_str(), errorMessage.c_str());
 		return false;
 	}
 
@@ -357,27 +476,39 @@ static bool runCdConversion(const std::string& inputPath, const std::string& out
 	if (err)
 	{
 		errorMessage = err.message();
-		osd_file::remove(outputPath);
-		ERROR_LOG(COMMON, "CHD CD conversion metadata failed: output='%s' message='%s'", outputPath.c_str(), errorMessage.c_str());
+		chd.reset();
+		removePendingOutput(pendingOutputPath, errorMessage);
+		ERROR_LOG(COMMON, "CHD CD conversion metadata failed: output='%s' pending='%s' message='%s'",
+			outputPath.c_str(), pendingOutputPath.c_str(), errorMessage.c_str());
 		return false;
 	}
 
-	err = run_compression(*chd, progressCallback);
+	err = run_compression(*chd, progressCallback, cancelCallback);
 	if (err)
 	{
-		errorMessage = err.message();
-		osd_file::remove(outputPath);
-		ERROR_LOG(COMMON, "CHD CD conversion compression failed: output='%s' message='%s'", outputPath.c_str(), errorMessage.c_str());
+		errorMessage = err == std::errc::operation_canceled ? "Conversion cancelled." : err.message();
+		chd.reset();
+		removePendingOutput(pendingOutputPath, errorMessage);
+		ERROR_LOG(COMMON, "CHD CD conversion compression failed: output='%s' pending='%s' message='%s'",
+			outputPath.c_str(), pendingOutputPath.c_str(), errorMessage.c_str());
 		return false;
 	}
 
+	chd.reset();
+	if (!publishPendingOutput(pendingOutputPath, outputPath, errorMessage))
+	{
+		ERROR_LOG(COMMON, "CHD CD conversion finalize failed: output='%s' pending='%s' message='%s'",
+			outputPath.c_str(), pendingOutputPath.c_str(), errorMessage.c_str());
+		return false;
+	}
 	NOTICE_LOG(COMMON, "CHD CD conversion success: output='%s' tracks=%u sectors=%u", outputPath.c_str(), toc.numtrks, totalSectors);
 	return true;
 }
 
 static bool runDvdConversion(const std::string& inputPath, const std::string& outputPath, std::string& errorMessage,
 	CompressionProfile compressionProfile,
-	const std::function<void(double complete, double ratio, const std::string& phase)>& progressCallback)
+	const std::function<void(double complete, double ratio, const std::string& phase)>& progressCallback,
+	const std::function<bool()>& cancelCallback)
 {
 	NOTICE_LOG(COMMON, "CHD DVD conversion begin: input='%s' output='%s' compression='%s'",
 		inputPath.c_str(), outputPath.c_str(), describeCompressionStack(Mode::CreateDvd, compressionProfile));
@@ -407,12 +538,22 @@ static bool runDvdConversion(const std::string& inputPath, const std::string& ou
 
 	const uint32_t hunk_size = 2 * 2048;
 	const CompressionStack compression = compressionStackForProfile(Mode::CreateDvd, compressionProfile);
-	auto chd = std::make_unique<rawfile_compressor>(*inputFile, 0, inputSize);
-	err = create_output_chd(*chd, outputPath, inputSize, hunk_size, 2048, compression.codecs);
+	const std::string pendingOutputPath = pendingOutputPathFor(outputPath);
+	if (!preparePendingOutput(outputPath, pendingOutputPath, errorMessage))
+	{
+		ERROR_LOG(COMMON, "CHD DVD conversion output prepare failed: output='%s' pending='%s' message='%s'",
+			outputPath.c_str(), pendingOutputPath.c_str(), errorMessage.c_str());
+		return false;
+	}
+	auto chd = std::make_unique<rawfile_compressor>(*inputFile, cancelCallback, 0, inputSize);
+	err = create_output_chd(*chd, pendingOutputPath, inputSize, hunk_size, 2048, compression.codecs);
 	if (err)
 	{
 		errorMessage = err.message();
-		ERROR_LOG(COMMON, "CHD DVD conversion create failed: output='%s' message='%s'", outputPath.c_str(), errorMessage.c_str());
+		chd.reset();
+		removePendingOutput(pendingOutputPath, errorMessage);
+		ERROR_LOG(COMMON, "CHD DVD conversion create failed: output='%s' pending='%s' message='%s'",
+			outputPath.c_str(), pendingOutputPath.c_str(), errorMessage.c_str());
 		return false;
 	}
 
@@ -420,20 +561,31 @@ static bool runDvdConversion(const std::string& inputPath, const std::string& ou
 	if (err)
 	{
 		errorMessage = err.message();
-		osd_file::remove(outputPath);
-		ERROR_LOG(COMMON, "CHD DVD conversion metadata failed: output='%s' message='%s'", outputPath.c_str(), errorMessage.c_str());
+		chd.reset();
+		removePendingOutput(pendingOutputPath, errorMessage);
+		ERROR_LOG(COMMON, "CHD DVD conversion metadata failed: output='%s' pending='%s' message='%s'",
+			outputPath.c_str(), pendingOutputPath.c_str(), errorMessage.c_str());
 		return false;
 	}
 
-	err = run_compression(*chd, progressCallback);
+	err = run_compression(*chd, progressCallback, cancelCallback);
 	if (err)
 	{
-		errorMessage = err.message();
-		osd_file::remove(outputPath);
-		ERROR_LOG(COMMON, "CHD DVD conversion compression failed: output='%s' message='%s'", outputPath.c_str(), errorMessage.c_str());
+		errorMessage = err == std::errc::operation_canceled ? "Conversion cancelled." : err.message();
+		chd.reset();
+		removePendingOutput(pendingOutputPath, errorMessage);
+		ERROR_LOG(COMMON, "CHD DVD conversion compression failed: output='%s' pending='%s' message='%s'",
+			outputPath.c_str(), pendingOutputPath.c_str(), errorMessage.c_str());
 		return false;
 	}
 
+	chd.reset();
+	if (!publishPendingOutput(pendingOutputPath, outputPath, errorMessage))
+	{
+		ERROR_LOG(COMMON, "CHD DVD conversion finalize failed: output='%s' pending='%s' message='%s'",
+			outputPath.c_str(), pendingOutputPath.c_str(), errorMessage.c_str());
+		return false;
+	}
 	NOTICE_LOG(COMMON, "CHD DVD conversion success: output='%s' size=%llu", outputPath.c_str(), (unsigned long long)inputSize);
 	return true;
 }
@@ -463,7 +615,8 @@ const char *describeCompressionStack(Mode mode, CompressionProfile profile)
 
 bool runConversion(Mode mode, const std::string& inputPath, const std::string& outputPath, std::string& errorMessage,
 	const std::function<void(double complete, double ratio, const std::string& phase)>& progressCallback,
-	CompressionProfile compressionProfile)
+	CompressionProfile compressionProfile,
+	const std::function<bool()>& cancelCallback)
 {
 	try
 	{
@@ -471,8 +624,8 @@ bool runConversion(Mode mode, const std::string& inputPath, const std::string& o
 			mode == Mode::CreateCd ? "cd" : "dvd", describeCompressionStack(mode, compressionProfile),
 			inputPath.c_str(), outputPath.c_str());
 		if (mode == Mode::CreateCd)
-			return runCdConversion(inputPath, outputPath, errorMessage, compressionProfile, progressCallback);
-		return runDvdConversion(inputPath, outputPath, errorMessage, compressionProfile, progressCallback);
+			return runCdConversion(inputPath, outputPath, errorMessage, compressionProfile, progressCallback, cancelCallback);
+		return runDvdConversion(inputPath, outputPath, errorMessage, compressionProfile, progressCallback, cancelCallback);
 	}
 	catch (const std::error_condition& e)
 	{

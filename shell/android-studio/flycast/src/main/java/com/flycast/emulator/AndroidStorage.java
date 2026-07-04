@@ -211,13 +211,17 @@ public class AndroidStorage {
     {
         Uri treeUri = Uri.parse(uri);
         String documentId;
+        final boolean isTreeUri = uri.contains("/tree/");
         if (DocumentsContract.isDocumentUri(activity, treeUri))
             documentId = DocumentsContract.getDocumentId(treeUri);
         else
             documentId = DocumentsContract.getTreeDocumentId(treeUri);
-        Uri docUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, documentId);
-        final Uri childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(docUri,
-                DocumentsContract.getDocumentId(docUri));
+        Uri docUri = isTreeUri
+                ? DocumentsContract.buildDocumentUriUsingTree(treeUri, documentId)
+                : DocumentsContract.buildDocumentUri(treeUri.getAuthority(), documentId);
+        final Uri childrenUri = isTreeUri
+                ? DocumentsContract.buildChildDocumentsUriUsingTree(docUri, DocumentsContract.getDocumentId(docUri))
+                : DocumentsContract.buildChildDocumentsUri(docUri.getAuthority(), documentId);
         final ArrayList<FileInfo> results = new ArrayList<>();
 
         Cursor c = null;
@@ -230,7 +234,9 @@ public class AndroidStorage {
             while (c.moveToNext())
             {
                 final String childId = c.getString(0);
-                final Uri childUri = DocumentsContract.buildDocumentUriUsingTree(docUri, childId);
+                final Uri childUri = isTreeUri
+                        ? DocumentsContract.buildDocumentUriUsingTree(docUri, childId)
+                        : DocumentsContract.buildDocumentUri(docUri.getAuthority(), childId);
                 FileInfo info = new FileInfo();
                 info.setPath(childUri.toString());
                 info.setName(c.getString(1));
@@ -285,6 +291,12 @@ public class AndroidStorage {
             docId = DocumentsContract.getDocumentId(refUri);
         else
             docId = DocumentsContract.getTreeDocumentId(refUri);
+
+        // File pickers may return a plain document URI instead of a tree URI.
+        // buildDocumentUriUsingTree rejects that shape, but CHD CUE/BIN handling
+        // still needs to resolve sibling track files from the selected document.
+        if (!reference.contains("/tree/"))
+            return DocumentsContract.buildDocumentUri(refUri.getAuthority(), docId + "/" + relative).toString();
         return DocumentsContract.buildDocumentUriUsingTree(refUri, docId + "/" + relative).toString();
     }
 
@@ -328,6 +340,31 @@ public class AndroidStorage {
         } finally {
             if (cursor != null)
                 cursor.close();
+        }
+    }
+
+    public boolean deleteDocument(String uriString)
+    {
+        try {
+            return DocumentsContract.deleteDocument(activity.getContentResolver(), Uri.parse(uriString));
+        } catch (Exception e) {
+            Log.w("Flycast", "deleteDocument failed for " + uriString, e);
+            return false;
+        }
+    }
+
+    public boolean renameDocument(String oldUriString, String newUriString)
+    {
+        try {
+            // SAF content URIs cannot be finalized with POSIX rename. Rename the
+            // staged .hcpart document through the provider so scanners only see
+            // the final .chd after compression has closed cleanly.
+            Uri renamed = DocumentsContract.renameDocument(activity.getContentResolver(),
+                    Uri.parse(oldUriString), getDocumentName(newUriString));
+            return renamed != null && exists(newUriString);
+        } catch (Exception e) {
+            Log.w("Flycast", "renameDocument failed from " + oldUriString + " to " + newUriString, e);
+            return false;
         }
     }
 
