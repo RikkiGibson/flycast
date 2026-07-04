@@ -366,6 +366,7 @@ extern Option<int> Language;	// 0 -> JP, 1 -> EN, 2 -> DE, 3 -> FR, 4 -> SP, 5 -
 extern OptionString UILanguage;
 extern Option<bool> AutoLoadState;
 extern Option<bool> AutoSaveState;
+extern Option<bool> SaveProtection;
 extern Option<int, false> SavestateSlot;
 extern Option<bool> ForceFreePlay;
 extern Option<bool, false> FetchBoxart;
@@ -480,6 +481,7 @@ extern Option<bool> NativeDepthInterpolation;
 extern Option<bool> EmulateFramebuffer;
 extern Option<bool> FixUpscaleBleedingEdge;
 extern Option<bool> CustomGpuDriver;
+extern Option<bool> FramePacing;
 #ifdef VIDEO_ROUTING
 extern Option<bool, false> VideoRouting;
 extern Option<bool, false> VideoRoutingScale;
@@ -530,6 +532,7 @@ extern Option<float> ProfilerFrameWarningTime;
 
 extern Option<bool> NetworkEnable;
 extern Option<bool> ActAsServer;
+extern Option<bool> NaomiSatellite;
 extern OptionString DNS;
 extern OptionString NetworkServer;
 extern Option<int> LocalPort;
@@ -584,5 +587,6 @@ extern Option<bool> EnableAchievements;
 extern Option<bool> AchievementsHardcoreMode;
 extern OptionString AchievementsUserName;
 extern OptionString AchievementsToken;
+extern OptionString AchievementsHostUrl;
 
 } // namespace config

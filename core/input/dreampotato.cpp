@@ -1,5 +1,6 @@
 /*
 	This file is part of Flycast.
+	Portions Copyright 2026 The Hollycast Authors
 
     Flycast is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -267,8 +268,12 @@ public:
 		return connectionStatus == ConnectionStatus::Connected;
 	}
 
-	const char* getName() const override {
+	const char* getProductName() const override {
 		return "DreamPotato";
+	}
+
+	u32 getFunctionCodesMask(int forPort) const override {
+		return isPortDocked(forPort) ? (MFID_1_Storage | MFID_2_LCD | MFID_3_Clock) : 0;
 	}
 
 	std::shared_ptr<maple_device> createMapleDevice(int bus, int port) override {
@@ -281,7 +286,7 @@ public:
 	void init(u32 ports);
 	void term() override;
 
-	bool isPortDocked(int port)
+	bool isPortDocked(int port) const
 	{
 		assert(port == 0 || port == 1);
 		return dockedPorts & (1 << port);
