@@ -582,9 +582,9 @@ private:
 
 	// work item thread
 #ifdef __ANDROID__
-	// Android conversions run beside the live GL UI and SAF storage. Keep the
-	// CHD staging buffers smaller there to leave native memory for rendering.
-	static constexpr int WORK_BUFFER_HUNKS = 128;
+	// Android conversions benefit from the same staging depth as desktop when
+	// the compressor pool is active; smaller buffers make large jobs tail off.
+	static constexpr int WORK_BUFFER_HUNKS = 256;
 #else
 	static constexpr int WORK_BUFFER_HUNKS = 256;
 #endif

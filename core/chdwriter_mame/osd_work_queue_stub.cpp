@@ -38,6 +38,9 @@ struct osd_work_queue
 	std::condition_variable cond;
 	std::condition_variable idleCond;
 	std::deque<osd_work_item *> items;
+#ifdef __ANDROID__
+	std::vector<osd_work_item *> retiredAutoItems;
+#endif
 	std::vector<std::thread> workers;
 	bool stopping = false;
 };
@@ -72,12 +75,11 @@ static unsigned workerCountForFlags(int flags)
 		if (count == 0)
 			count = 1;
 #ifdef __ANDROID__
-		// CHD codecs allocate per worker. Mobile devices can report many cores,
-		// but running a compressor on nearly all of them can exhaust native heap
-		// during FLAC/LZMA-heavy batches before CPU scheduling becomes the limit.
+		// Leave one core for Android/UI work while letting large CHD jobs use
+		// the rest of the device. The IO queue has its own single worker below,
+		// so keeping the compressor pool at cores - 1 avoids undersubscribing.
 		if (count > 1)
 			count -= 1;
-		count = std::min<unsigned>(count, 8);
 #endif
 		return std::min<unsigned>(count, WORK_MAX_THREADS);
 	}
@@ -96,18 +98,36 @@ static unsigned workerCountForFlags(int flags)
 
 static void runItem(osd_work_item *item, int threadid)
 {
+	osd_work_queue *queue = item->queue;
 	item->result = item->callback ? item->callback(item->param, threadid) : nullptr;
-	if (item->queue)
+	if (queue)
 	{
-		item->queue->pending.fetch_sub(1);
-		item->queue->idleCond.notify_all();
+		queue->pending.fetch_sub(1);
+		queue->idleCond.notify_all();
 	}
 	// Publish completion last. Waiters may release non-auto items immediately
 	// after this flag flips, so the worker must not touch the item afterward.
 	item->done.store(1);
 	item->cond.notify_all();
 	if (item->autoRelease)
+	{
+#ifdef __ANDROID__
+		if (queue)
+		{
+			// Android's libc aborts if an item mutex is destroyed while queue
+			// teardown is racing a worker tail. Retire auto-release items with
+			// the queue and delete them only after all workers have joined.
+			std::lock_guard<std::mutex> lock(queue->mutex);
+			queue->retiredAutoItems.push_back(item);
+		}
+		else
+		{
+			delete item;
+		}
+#else
 		delete item;
+#endif
+	}
 }
 
 static void workerThread(osd_work_queue *queue, int threadid)
@@ -173,7 +193,16 @@ void osd_work_queue_free(osd_work_queue *queue)
 {
 	if (!queue)
 		return;
+#ifdef __ANDROID__
+	// This is an ownership boundary: the queue object owns the worker threads,
+	// queued items, mutexes, and condition variables. Large Android CHD hunks can
+	// run past the normal poll timeout, so keep waiting before destroying them.
+	while (!osd_work_queue_wait(queue, osd_ticks_per_second()))
+	{
+	}
+#else
 	osd_work_queue_wait(queue, 30 * osd_ticks_per_second());
+#endif
 	{
 		std::lock_guard<std::mutex> lock(queue->mutex);
 		queue->stopping = true;
@@ -184,6 +213,10 @@ void osd_work_queue_free(osd_work_queue *queue)
 		if (worker.joinable())
 			worker.join();
 	}
+#ifdef __ANDROID__
+	for (osd_work_item *item : queue->retiredAutoItems)
+		delete item;
+#endif
 	delete queue;
 }
 
@@ -242,6 +275,17 @@ void *osd_work_item_result(osd_work_item *item)
 void osd_work_item_release(osd_work_item *item)
 {
 	if (item)
+	{
+#ifdef __ANDROID__
+		// Larger CHD hunks can keep a compressor worker busy longer than the
+		// normal wait timeout, especially on Android SAF paths. Releasing an
+		// unfinished item lets a worker later jump through freed callback data.
+		while (!osd_work_item_wait(item, osd_ticks_per_second()))
+		{
+		}
+#else
 		osd_work_item_wait(item, 30 * osd_ticks_per_second());
+#endif
+	}
 	delete item;
 }

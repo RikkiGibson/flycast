@@ -57,6 +57,30 @@ static constexpr std::array<const char*, 3> kScopes = {{
 	"Single ROM Folder",
 	"Whole Folder",
 }};
+#ifdef __ANDROID__
+static constexpr std::array<const char*, 3> kCompressionProfiles = {{
+	"Fast",
+	"High Compression",
+	"Max / Archive",
+}};
+static constexpr std::array<chdconvert::CompressionProfile, 3> kCompressionProfileValues = {{
+	chdconvert::CompressionProfile::Fast,
+	chdconvert::CompressionProfile::HighCompression,
+	chdconvert::CompressionProfile::MaxArchive,
+}};
+static constexpr std::array<const char*, 3> kCompressionProfileSuffixes = {{
+	"fast",
+	"high",
+	"max",
+}};
+static constexpr std::array<const char*, 3> kBenchmarkProfileColumns = {{
+	"Fast",
+	"High",
+	"Max",
+}};
+static constexpr const char *kCompressionProfileSummary = "Fast, High Compression, and Max / Archive profiles.";
+static int s_compressionProfile = 0;
+#else
 static constexpr std::array<const char*, 4> kCompressionProfiles = {{
 	"Fast",
 	"Balanced / Recommended",
@@ -75,10 +99,18 @@ static constexpr std::array<const char*, 4> kCompressionProfileSuffixes = {{
 	"high",
 	"max",
 }};
+static constexpr std::array<const char*, 4> kBenchmarkProfileColumns = {{
+	"Fast",
+	"Balanced",
+	"High",
+	"Max",
+}};
+static constexpr const char *kCompressionProfileSummary = "Fast, Balanced, High Compression, and Max / Archive profiles.";
+static int s_compressionProfile = (int)chdconvert::CompressionProfile::Balanced;
+#endif
 
 static ChdPage s_page = ChdPage::Overview;
 static int s_scope = 0;
-static int s_compressionProfile = (int)chdconvert::CompressionProfile::Balanced;
 static std::string s_sourcePath;
 static std::string s_outputPath;
 static std::string s_sourcePathText;
@@ -121,7 +153,7 @@ struct ConversionRunStats
 
 struct BenchmarkProfileStats
 {
-	chdconvert::CompressionProfile profile = chdconvert::CompressionProfile::Balanced;
+	chdconvert::CompressionProfile profile = chdconvert::CompressionProfile::Fast;
 	std::string stack;
 	uint64_t inputBytes = 0;
 	uint64_t outputBytes = 0;
@@ -133,7 +165,7 @@ struct BenchmarkProfileStats
 
 struct BenchmarkItemStats
 {
-	chdconvert::CompressionProfile profile = chdconvert::CompressionProfile::Balanced;
+	chdconvert::CompressionProfile profile = chdconvert::CompressionProfile::Fast;
 	std::string source;
 	std::string output;
 	std::string message;
@@ -1175,7 +1207,7 @@ static void renderHeroCard()
 		ImGui::TableNextColumn();
 		ImGui::BeginGroup();
 		header("Compression");
-		ImGui::TextWrapped("Fast, Balanced, High Compression, and Max / Archive profiles.");
+		ImGui::TextWrapped("%s", kCompressionProfileSummary);
 		ImGui::EndGroup();
 
 		ImGui::TableNextColumn();
@@ -1421,13 +1453,13 @@ static void renderConverterTab()
 					{
 						ImGui::TextUnformatted("No per-game benchmark rows were recorded.");
 					}
-					else if (ImGui::BeginTable("CHDBenchmarkItems", 5,
+					else if (ImGui::BeginTable("CHDBenchmarkItems", (int)kBenchmarkProfileColumns.size() + 1,
 						ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg | ImGuiTableFlags_NoSavedSettings))
 					{
 						struct BenchmarkGameRow
 						{
 							std::string source;
-							const BenchmarkItemStats *profiles[4] = {};
+							std::array<const BenchmarkItemStats *, kCompressionProfileValues.size()> profiles = {};
 						};
 						std::vector<BenchmarkGameRow> gameRows;
 						for (const BenchmarkItemStats& item : benchmarkItems)
@@ -1458,10 +1490,8 @@ static void renderConverterTab()
 						}
 
 						ImGui::TableSetupColumn("Game", ImGuiTableColumnFlags_WidthFixed, uiScaled(170.0f));
-						ImGui::TableSetupColumn("Fast", ImGuiTableColumnFlags_WidthFixed, uiScaled(142.0f));
-						ImGui::TableSetupColumn("Balanced", ImGuiTableColumnFlags_WidthFixed, uiScaled(142.0f));
-						ImGui::TableSetupColumn("High", ImGuiTableColumnFlags_WidthFixed, uiScaled(142.0f));
-						ImGui::TableSetupColumn("Max", ImGuiTableColumnFlags_WidthFixed, uiScaled(142.0f));
+						for (const char *columnName : kBenchmarkProfileColumns)
+							ImGui::TableSetupColumn(columnName, ImGuiTableColumnFlags_WidthFixed, uiScaled(142.0f));
 						ImGui::TableHeadersRow();
 						for (const BenchmarkGameRow& gameRow : gameRows)
 						{

@@ -37,12 +37,18 @@ enum class CompressionProfile
 	MaxArchive,
 };
 
+#ifdef __ANDROID__
+static constexpr CompressionProfile kDefaultCompressionProfile = CompressionProfile::Fast;
+#else
+static constexpr CompressionProfile kDefaultCompressionProfile = CompressionProfile::Balanced;
+#endif
+
 const char *describeCompressionProfile(CompressionProfile profile);
 const char *describeCompressionStack(Mode mode, CompressionProfile profile);
 
 bool runConversion(Mode mode, const std::string& inputPath, const std::string& outputPath, std::string& errorMessage,
 	const std::function<void(double complete, double ratio, const std::string& phase)>& progressCallback = {},
-	CompressionProfile compressionProfile = CompressionProfile::Balanced,
+	CompressionProfile compressionProfile = kDefaultCompressionProfile,
 	const std::function<bool()>& cancelCallback = {});
 
 } // namespace chdwriter_mame

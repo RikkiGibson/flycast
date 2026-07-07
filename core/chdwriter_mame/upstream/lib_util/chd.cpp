@@ -3173,7 +3173,13 @@ std::error_condition chd_file_compressor::compress_continue(double &progress, do
 			else
 			{
 				// wait for all reads to finish and if we're compressed, write the final SHA1 and map
+#ifdef __ANDROID__
+				while (!osd_work_queue_wait(m_read_queue, osd_ticks_per_second()))
+				{
+				}
+#else
 				osd_work_queue_wait(m_read_queue, 30 * osd_ticks_per_second());
+#endif
 				if (!compressed())
 					return std::error_condition();
 				std::error_condition err = set_raw_sha1(m_compsha1.finish());

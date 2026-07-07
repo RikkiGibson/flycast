@@ -27,6 +27,7 @@
 #include "upstream/osd/osdfile.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cerrno>
 #include <cstdint>
 #include <cstring>
@@ -52,8 +53,9 @@ static CompressionStack compressionStackForProfile(Mode mode, CompressionProfile
 	{
 #ifdef __ANDROID__
 		// Android keeps real archive profiles through LZMA/ZSTD/ZLIB, but skips
-		// CD FLAC: its encoder allocates large aligned buffers per active worker
-		// and can OOM mid-benchmark on mobile even after lazy codec allocation.
+		// CD FLAC. On the S25 Ultra, libFLAC can abort in Scudo while creating
+		// its bitwriter even with a single compression worker, and including it
+		// makes Fast much slower before the crash path is hit.
 		switch (profile)
 		{
 		case CompressionProfile::Fast:
@@ -65,7 +67,7 @@ static CompressionStack compressionStackForProfile(Mode mode, CompressionProfile
 		case CompressionProfile::MaxArchive:
 			return { { CHD_CODEC_CD_LZMA, CHD_CODEC_CD_ZSTD, CHD_CODEC_CD_ZLIB, CHD_CODEC_NONE }, "cdlz,cdzs,cdzl" };
 		}
-		return { { CHD_CODEC_CD_ZSTD, CHD_CODEC_NONE, CHD_CODEC_NONE, CHD_CODEC_NONE }, "cdzs" };
+		return { { CHD_CODEC_CD_ZLIB, CHD_CODEC_NONE, CHD_CODEC_NONE, CHD_CODEC_NONE }, "cdzl" };
 #else
 		switch (profile)
 		{
@@ -86,9 +88,11 @@ static CompressionStack compressionStackForProfile(Mode mode, CompressionProfile
 	{
 	case CompressionProfile::Fast:
 	case CompressionProfile::Balanced:
-	case CompressionProfile::HighCompression:
-	case CompressionProfile::MaxArchive:
 		return { { CHD_CODEC_ZLIB, CHD_CODEC_HUFFMAN, CHD_CODEC_NONE, CHD_CODEC_NONE }, "zlib,huff" };
+	case CompressionProfile::HighCompression:
+		return { { CHD_CODEC_ZSTD, CHD_CODEC_ZLIB, CHD_CODEC_HUFFMAN, CHD_CODEC_NONE }, "zstd,zlib,huff" };
+	case CompressionProfile::MaxArchive:
+		return { { CHD_CODEC_LZMA, CHD_CODEC_ZSTD, CHD_CODEC_ZLIB, CHD_CODEC_HUFFMAN }, "lzma,zstd,zlib,huff" };
 	}
 	return { { CHD_CODEC_ZLIB, CHD_CODEC_HUFFMAN, CHD_CODEC_NONE, CHD_CODEC_NONE }, "zlib,huff" };
 }
@@ -359,6 +363,7 @@ static std::error_condition run_compression(chd_file_compressor &chd,
 	std::error_condition err;
 	unsigned iteration = 0;
 	bool cancelLogged = false;
+	auto nextProgressLog = std::chrono::steady_clock::now();
 	if (progressCallback)
 		progressCallback(complete, ratio, "Starting compression...");
 	while ((err = chd.compress_continue(complete, ratio)) == chd_file::error::WALKING_PARENT || err == chd_file::error::COMPRESSING)
@@ -375,10 +380,12 @@ static std::error_condition run_compression(chd_file_compressor &chd,
 				progressCallback(complete, ratio, "Cancelling conversion...");
 		}
 		++iteration;
-		if (iteration <= 4 || (iteration % 128) == 0)
+		const auto now = std::chrono::steady_clock::now();
+		if (iteration <= 4 || now >= nextProgressLog)
 		{
 			NOTICE_LOG(COMMON, "CHD compression progress: iteration=%u complete=%.4f ratio=%.4f state='%s'",
 				iteration, complete, ratio, err.message().c_str());
+			nextProgressLog = now + std::chrono::seconds(10);
 		}
 		if (progressCallback)
 			progressCallback(complete, ratio, err.message());
@@ -536,7 +543,13 @@ static bool runDvdConversion(const std::string& inputPath, const std::string& ou
 		return false;
 	}
 
+#ifdef __ANDROID__
+	// Larger DVD hunks reduce queue overhead and long compressor tails on large
+	// ISO images while staying well under CHD's 1 MB hunk limit.
+	const uint32_t hunk_size = 8 * 2048;
+#else
 	const uint32_t hunk_size = 2 * 2048;
+#endif
 	const CompressionStack compression = compressionStackForProfile(Mode::CreateDvd, compressionProfile);
 	const std::string pendingOutputPath = pendingOutputPathFor(outputPath);
 	if (!preparePendingOutput(outputPath, pendingOutputPath, errorMessage))
@@ -599,13 +612,17 @@ const char *describeCompressionProfile(CompressionProfile profile)
 	case CompressionProfile::Fast:
 		return "Fast";
 	case CompressionProfile::Balanced:
+#ifdef __ANDROID__
+		return "Balanced";
+#else
 		return "Balanced / Recommended";
+#endif
 	case CompressionProfile::HighCompression:
 		return "High Compression";
 	case CompressionProfile::MaxArchive:
 		return "Max / Archive";
 	}
-	return "Balanced / Recommended";
+	return describeCompressionProfile(kDefaultCompressionProfile);
 }
 
 const char *describeCompressionStack(Mode mode, CompressionProfile profile)

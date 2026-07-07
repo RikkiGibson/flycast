@@ -180,7 +180,7 @@ static chdwriter_mame::CompressionProfile writerCompressionProfile(CompressionPr
 	case CompressionProfile::MaxArchive:
 		return chdwriter_mame::CompressionProfile::MaxArchive;
 	}
-	return chdwriter_mame::CompressionProfile::Balanced;
+	return writerCompressionProfile(kDefaultCompressionProfile);
 }
 
 static std::string normalizeDirectoryPath(const std::string& path)
