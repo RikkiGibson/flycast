@@ -84,6 +84,23 @@ static CompressionStack compressionStackForProfile(Mode mode, CompressionProfile
 #endif
 	}
 
+#ifdef __ANDROID__
+	// DVD/ISO data does not benefit from the CD-specific codecs. Use ZSTD as
+	// the fast Android path, then add LZMA and fallbacks only for heavier
+	// profiles so benchmark results reflect real speed/size tradeoffs.
+	switch (profile)
+	{
+	case CompressionProfile::Fast:
+		return { { CHD_CODEC_ZSTD, CHD_CODEC_NONE, CHD_CODEC_NONE, CHD_CODEC_NONE }, "zstd" };
+	case CompressionProfile::Balanced:
+		return { { CHD_CODEC_ZSTD, CHD_CODEC_ZLIB, CHD_CODEC_HUFFMAN, CHD_CODEC_NONE }, "zstd,zlib,huff" };
+	case CompressionProfile::HighCompression:
+		return { { CHD_CODEC_LZMA, CHD_CODEC_ZSTD, CHD_CODEC_ZLIB, CHD_CODEC_NONE }, "lzma,zstd,zlib" };
+	case CompressionProfile::MaxArchive:
+		return { { CHD_CODEC_LZMA, CHD_CODEC_ZSTD, CHD_CODEC_ZLIB, CHD_CODEC_HUFFMAN }, "lzma,zstd,zlib,huff" };
+	}
+	return { { CHD_CODEC_ZSTD, CHD_CODEC_NONE, CHD_CODEC_NONE, CHD_CODEC_NONE }, "zstd" };
+#else
 	switch (profile)
 	{
 	case CompressionProfile::Fast:
@@ -95,6 +112,7 @@ static CompressionStack compressionStackForProfile(Mode mode, CompressionProfile
 		return { { CHD_CODEC_LZMA, CHD_CODEC_ZSTD, CHD_CODEC_ZLIB, CHD_CODEC_HUFFMAN }, "lzma,zstd,zlib,huff" };
 	}
 	return { { CHD_CODEC_ZLIB, CHD_CODEC_HUFFMAN, CHD_CODEC_NONE, CHD_CODEC_NONE }, "zlib,huff" };
+#endif
 }
 
 static std::string pendingOutputPathFor(const std::string& outputPath)

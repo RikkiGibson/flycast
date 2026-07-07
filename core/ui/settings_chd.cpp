@@ -52,12 +52,13 @@ enum class ChdPage
 	Converter,
 };
 
-static constexpr std::array<const char*, 3> kScopes = {{
-	"Single ROM",
-	"Single ROM Folder",
-	"Whole Folder",
-}};
 #ifdef __ANDROID__
+static constexpr std::array<const char*, 4> kScopes = {{
+	"ISO",
+	"ISO Folder",
+	"GDI/CUE Folder",
+	"GDI/CUE Whole Folder",
+}};
 static constexpr std::array<const char*, 3> kCompressionProfiles = {{
 	"Fast",
 	"High Compression",
@@ -81,6 +82,11 @@ static constexpr std::array<const char*, 3> kBenchmarkProfileColumns = {{
 static constexpr const char *kCompressionProfileSummary = "Fast, High Compression, and Max / Archive profiles.";
 static int s_compressionProfile = 0;
 #else
+static constexpr std::array<const char*, 3> kScopes = {{
+	"Single ROM",
+	"Single ROM Folder",
+	"Whole Folder",
+}};
 static constexpr std::array<const char*, 4> kCompressionProfiles = {{
 	"Fast",
 	"Balanced / Recommended",
@@ -619,21 +625,71 @@ static const char* scopeLabel(int scope)
 	return kScopes[std::clamp(scope, 0, (int)kScopes.size() - 1)];
 }
 
+#ifndef __ANDROID__
 static bool isWholeFolderScope(int scope)
 {
 	return std::clamp(scope, 0, (int)kScopes.size() - 1) == 2;
 }
+#endif
+
+#ifdef __ANDROID__
+static bool isIsoConversionScope(int scope)
+{
+	const int normalized = std::clamp(scope, 0, (int)kScopes.size() - 1);
+	return normalized == 0 || normalized == 1;
+}
+
+static bool isFolderScanScope(int scope)
+{
+	const int normalized = std::clamp(scope, 0, (int)kScopes.size() - 1);
+	return normalized == 1 || normalized == 3;
+}
+
+static bool sourceMatchesScope(const std::string& source, int scope)
+{
+	const chdconvert::ConversionPlan plan = chdconvert::planConversion(source);
+	if (!plan.canRunNow)
+		return false;
+	const bool isIso = plan.probe.kind == chdconvert::SourceKind::Iso;
+	return isIsoConversionScope(scope) ? isIso : !isIso;
+}
+
+static std::vector<std::string> filterSourcesForScope(const std::vector<std::string>& sources, int scope)
+{
+	std::vector<std::string> filtered;
+	for (const std::string& source : sources)
+	{
+		if (sourceMatchesScope(source, scope))
+			filtered.push_back(source);
+	}
+	return filtered;
+}
+#endif
 
 static const char* scopeDescription(int scope)
 {
 	switch (std::clamp(scope, 0, (int)kScopes.size() - 1))
 	{
 	case 0:
+#ifdef __ANDROID__
+		return "Pick one .iso file. Max / Archive is hidden here because ISO High Compression matches its output with a shorter run.";
+#else
 		return "Pick one .iso, .cue, or .gdi file. Companion track files are resolved from the same folder.";
+#endif
 	case 1:
+#ifdef __ANDROID__
+		return "Pick one folder and convert only ISO files found directly inside it.";
+#else
 		return "Pick one game folder and convert the first supported ROM set found inside it.";
+#endif
 	case 2:
+#ifdef __ANDROID__
+		return "Pick one game folder and convert the first supported GDI or CUE/BIN set found inside it. ISO files are skipped here.";
+#else
 		return "Pick one folder and convert every supported ROM set found directly inside it.";
+#endif
+	case 3:
+		return "Pick one folder and convert every supported GDI or CUE/BIN set found directly inside it. ISO files are skipped here.";
 	default:
 		return "";
 	}
@@ -645,17 +701,72 @@ static std::vector<std::string> collectSourcesForScope(const std::string& path, 
 	const chdconvert::ConversionPlan plan = chdconvert::planConversion(path);
 	if (normalizedScope == 0)
 	{
+#ifdef __ANDROID__
+		if (plan.canRunNow && plan.probe.kind == chdconvert::SourceKind::Iso)
+			return { plan.probe.primaryFile };
+		return {};
+#else
 		if (plan.canRunNow)
 			return { plan.probe.primaryFile };
 		return {};
+#endif
 	}
 	if (normalizedScope == 1)
 	{
+#ifdef __ANDROID__
+		return filterSourcesForScope(chdconvert::collectConvertibleSources(path, false), normalizedScope);
+#else
 		if (plan.canRunNow)
 			return { plan.probe.primaryFile };
 		return {};
+#endif
 	}
+#ifdef __ANDROID__
+	if (normalizedScope == 2)
+	{
+		std::vector<std::string> sources = filterSourcesForScope(chdconvert::collectConvertibleSources(path, false), normalizedScope);
+		if (!sources.empty())
+			return { sources.front() };
+		return {};
+	}
+	return filterSourcesForScope(chdconvert::collectConvertibleSources(path, false), normalizedScope);
+#else
 	return chdconvert::collectConvertibleSources(path, false);
+#endif
+}
+
+static size_t compressionProfileCountForScope(int scope)
+{
+#ifdef __ANDROID__
+	if (isIsoConversionScope(scope))
+		return 2;
+#endif
+	return kCompressionProfileValues.size();
+}
+
+static size_t activeCompressionProfileCount()
+{
+	return compressionProfileCountForScope(normalizedScope());
+}
+
+static chdconvert::CompressionProfile compressionProfileAt(size_t index)
+{
+	return kCompressionProfileValues[std::min(index, kCompressionProfileValues.size() - 1)];
+}
+
+static const char *compressionProfileLabelAt(size_t index)
+{
+	return kCompressionProfiles[std::min(index, kCompressionProfiles.size() - 1)];
+}
+
+static const char *compressionProfileSuffixAt(size_t index)
+{
+	return kCompressionProfileSuffixes[std::min(index, kCompressionProfileSuffixes.size() - 1)];
+}
+
+static const char *benchmarkProfileColumnAt(size_t index)
+{
+	return kBenchmarkProfileColumns[std::min(index, kBenchmarkProfileColumns.size() - 1)];
 }
 
 static const char* currentScopeLabel()
@@ -665,12 +776,20 @@ static const char* currentScopeLabel()
 
 static chdconvert::CompressionProfile currentCompressionProfile()
 {
-	return kCompressionProfileValues[std::clamp(s_compressionProfile, 0, (int)kCompressionProfileValues.size() - 1)];
+	const int maxIndex = (int)activeCompressionProfileCount() - 1;
+	s_compressionProfile = std::clamp(s_compressionProfile, 0, maxIndex);
+	return compressionProfileAt((size_t)s_compressionProfile);
 }
 
 static const char* currentCompressionStack()
 {
-	const chdconvert::SourceKind kind = s_hasPlan ? s_lastPlan.probe.kind : chdconvert::SourceKind::CueBin;
+#ifdef __ANDROID__
+	const chdconvert::SourceKind kind = isIsoConversionScope(normalizedScope()) ? chdconvert::SourceKind::Iso :
+		(s_hasPlan && s_lastPlan.probe.kind != chdconvert::SourceKind::Iso ? s_lastPlan.probe.kind : chdconvert::SourceKind::CueBin);
+#else
+	const chdconvert::SourceKind kind = s_hasPlan ? s_lastPlan.probe.kind :
+		chdconvert::SourceKind::CueBin;
+#endif
 	return chdconvert::describeCompressionStack(kind, currentCompressionProfile());
 }
 
@@ -907,7 +1026,8 @@ static void startAsyncBenchmark(const std::vector<std::string>& sources, const s
 
 	s_cancelRequested.store(false);
 	s_conversionRunning.store(true);
-	s_conversionTotal.store((int)(sources.size() * kCompressionProfileValues.size()));
+	const size_t profileCount = activeCompressionProfileCount();
+	s_conversionTotal.store((int)(sources.size() * profileCount));
 	s_conversionDone.store(0);
 	s_conversionOk.store(0);
 	s_conversionSkipped.store(0);
@@ -926,18 +1046,18 @@ static void startAsyncBenchmark(const std::vector<std::string>& sources, const s
 		std::chrono::system_clock::now().time_since_epoch()).count();
 	const uint64_t benchmarkId = selectBenchmarkIdForResume(sources, outputDirectory, fallbackBenchmarkId);
 	addTrace("BENCH", strprintf("Starting compression benchmark with %d source(s) across %d profiles.",
-		(int)sources.size(), (int)kCompressionProfileValues.size()));
+		(int)sources.size(), (int)profileCount));
 	if (benchmarkId != fallbackBenchmarkId)
 		addTrace("BENCH", strprintf("Resuming benchmark output set %llu.", (unsigned long long)benchmarkId));
 
-	s_conversionFuture = std::async(std::launch::async, [sources, outputDirectory, benchmarkId]() {
+	s_conversionFuture = std::async(std::launch::async, [sources, outputDirectory, benchmarkId, profileCount]() {
 		try
 		{
 			const auto benchmarkStart = std::chrono::steady_clock::now();
-			for (size_t profileIndex = 0; profileIndex < kCompressionProfileValues.size(); profileIndex++)
+			for (size_t profileIndex = 0; profileIndex < profileCount; profileIndex++)
 			{
-				const chdconvert::CompressionProfile profile = kCompressionProfileValues[profileIndex];
-				const std::string suffix = strprintf("-bench-%s-%llu", kCompressionProfileSuffixes[profileIndex],
+				const chdconvert::CompressionProfile profile = compressionProfileAt(profileIndex);
+				const std::string suffix = strprintf("-bench-%s-%llu", compressionProfileSuffixAt(profileIndex),
 					(unsigned long long)benchmarkId);
 				const auto profileStart = std::chrono::steady_clock::now();
 				BenchmarkProfileStats profileStats;
@@ -1261,7 +1381,11 @@ static void renderConverterTab()
 		ImGui::TextUnformatted("Conversion scope");
 		ImGui::SetNextItemWidth(-1.0f);
 		if (ImGui::Combo("##chd_scope", &s_scope, kScopes.data(), (int)kScopes.size()))
+		{
+			const int maxProfileIndex = (int)activeCompressionProfileCount() - 1;
+			s_compressionProfile = std::clamp(s_compressionProfile, 0, maxProfileIndex);
 			setStatus("Scope updated.");
+		}
 		ImGui::TextWrapped("%s", scopeDescription(s_scope));
 
 		ImGui::Spacing();
@@ -1297,8 +1421,24 @@ static void renderConverterTab()
 		ImGui::Spacing();
 		header("Compression");
 		ImGui::SetNextItemWidth(-1.0f);
-		if (ImGui::Combo("##chd_compression_profile", &s_compressionProfile, kCompressionProfiles.data(), (int)kCompressionProfiles.size()))
-			setStatus("Compression profile updated.");
+		const size_t activeProfileCount = activeCompressionProfileCount();
+		const int maxProfileIndex = (int)activeProfileCount - 1;
+		s_compressionProfile = std::clamp(s_compressionProfile, 0, maxProfileIndex);
+		if (ImGui::BeginCombo("##chd_compression_profile", compressionProfileLabelAt((size_t)s_compressionProfile)))
+		{
+			for (size_t profileIndex = 0; profileIndex < activeProfileCount; profileIndex++)
+			{
+				const bool selected = s_compressionProfile == (int)profileIndex;
+				if (ImGui::Selectable(compressionProfileLabelAt(profileIndex), selected))
+				{
+					s_compressionProfile = (int)profileIndex;
+					setStatus("Compression profile updated.");
+				}
+				if (selected)
+					ImGui::SetItemDefaultFocus();
+			}
+			ImGui::EndCombo();
+		}
 		ImGui::TextWrapped("Stack for detected media: %s", currentCompressionStack());
 
 		ImGui::Spacing();
@@ -1325,7 +1465,11 @@ static void renderConverterTab()
 		ImGui::Text("Compression: %s", chdconvert::describeCompressionProfile(currentCompressionProfile()));
 		ImGui::Text("Compression stack: %s", currentCompressionStack());
 		ImGui::TextUnformatted("Original files: preserved");
+#ifdef __ANDROID__
+		ImGui::Text("Folder scan: %s", isFolderScanScope(s_scope) ? "Yes" : "No");
+#else
 		ImGui::Text("Whole folder scan: %s", isWholeFolderScope(s_scope) ? "Yes" : "No");
+#endif
 		ImGui::TextWrapped("Source: %s", s_sourcePathText.empty() ? "not selected" : s_sourcePathText.c_str());
 		ImGui::TextWrapped("Output: %s", s_outputPathText.empty() ? "not selected" : s_outputPathText.c_str());
 		if (!s_hasPlan)
@@ -1449,11 +1593,12 @@ static void renderConverterTab()
 					ImGui::Spacing();
 					ImGui::TextUnformatted("Game Results");
 					ImGui::BeginChild("CHDBenchmarkDetailScroll", ImVec2(0, uiScaled(220.0f)), true, ImGuiWindowFlags_HorizontalScrollbar);
+					const size_t benchmarkProfileCount = activeCompressionProfileCount();
 					if (benchmarkItems.empty())
 					{
 						ImGui::TextUnformatted("No per-game benchmark rows were recorded.");
 					}
-					else if (ImGui::BeginTable("CHDBenchmarkItems", (int)kBenchmarkProfileColumns.size() + 1,
+					else if (ImGui::BeginTable("CHDBenchmarkItems", (int)benchmarkProfileCount + 1,
 						ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg | ImGuiTableFlags_NoSavedSettings))
 					{
 						struct BenchmarkGameRow
@@ -1479,9 +1624,9 @@ static void renderConverterTab()
 								gameRow = &gameRows.back();
 								gameRow->source = item.source;
 							}
-							for (size_t profileIndex = 0; profileIndex < kCompressionProfileValues.size(); profileIndex++)
+							for (size_t profileIndex = 0; profileIndex < benchmarkProfileCount; profileIndex++)
 							{
-								if (kCompressionProfileValues[profileIndex] == item.profile)
+								if (compressionProfileAt(profileIndex) == item.profile)
 								{
 									gameRow->profiles[profileIndex] = &item;
 									break;
@@ -1490,8 +1635,8 @@ static void renderConverterTab()
 						}
 
 						ImGui::TableSetupColumn("Game", ImGuiTableColumnFlags_WidthFixed, uiScaled(170.0f));
-						for (const char *columnName : kBenchmarkProfileColumns)
-							ImGui::TableSetupColumn(columnName, ImGuiTableColumnFlags_WidthFixed, uiScaled(142.0f));
+						for (size_t profileIndex = 0; profileIndex < benchmarkProfileCount; profileIndex++)
+							ImGui::TableSetupColumn(benchmarkProfileColumnAt(profileIndex), ImGuiTableColumnFlags_WidthFixed, uiScaled(142.0f));
 						ImGui::TableHeadersRow();
 						for (const BenchmarkGameRow& gameRow : gameRows)
 						{
