@@ -21,10 +21,10 @@
 #include "log/Log.h"
 #include "oslib/directory.h"
 #include "oslib/storage.h"
-#include "upstream/lib_util/cdrom.h"
-#include "upstream/lib_util/chd.h"
-#include "upstream/lib_util/corefile.h"
-#include "upstream/osd/osdfile.h"
+#include "upstream/src/lib/util/cdrom.h"
+#include "upstream/src/lib/util/chd.h"
+#include "upstream/src/lib/util/corefile.h"
+#include "upstream/src/osd/osdfile.h"
 
 #include <algorithm>
 #include <chrono>

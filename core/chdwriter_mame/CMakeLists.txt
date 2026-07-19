@@ -20,25 +20,25 @@
 set(HOLLYCAST_CHDWRITER_SOURCES
 	chdwriter_bridge.cpp
 	osd_work_queue_stub.cpp
-	upstream/lib_util/cdrom.cpp
-	upstream/lib_util/chd.cpp
-	upstream/lib_util/chdcodec.cpp
-	upstream/lib_util/corealloc.cpp
-	upstream/lib_util/corefile.cpp
-	upstream/lib_util/flac.cpp
-	upstream/lib_util/corestr.cpp
-	upstream/lib_util/hashing.cpp
-	upstream/lib_util/huffman.cpp
-	upstream/lib_util/ioprocs.cpp
-	upstream/lib_util/md5.cpp
-	upstream/lib_util/path.cpp
-	upstream/lib_util/strformat.cpp
-	upstream/lib_util/unicode.cpp
-	upstream/lib_util/vecstream.cpp
-	upstream/osd/osdcore.cpp
-	upstream/osd/modules/file/stdfile.cpp
-	upstream/osd/strconv.cpp
-	upstream/thirdparty/utf8proc/utf8proc.c
+	upstream/src/lib/util/cdrom.cpp
+	upstream/src/lib/util/chd.cpp
+	upstream/src/lib/util/chdcodec.cpp
+	upstream/src/lib/util/corealloc.cpp
+	upstream/src/lib/util/corefile.cpp
+	upstream/src/lib/util/flac.cpp
+	upstream/src/lib/util/corestr.cpp
+	upstream/src/lib/util/hashing.cpp
+	upstream/src/lib/util/huffman.cpp
+	upstream/src/lib/util/ioprocs.cpp
+	upstream/src/lib/util/md5.cpp
+	upstream/src/lib/util/path.cpp
+	upstream/src/lib/util/strformat.cpp
+	upstream/src/lib/util/unicode.cpp
+	upstream/src/lib/util/vecstream.cpp
+	upstream/src/osd/osdcore.cpp
+	upstream/src/osd/modules/file/stdfile.cpp
+	upstream/src/osd/strconv.cpp
+	upstream/3rdparty/utf8proc/utf8proc.c
 )
 
 if(NOT TARGET FLAC::FLAC)
@@ -70,10 +70,10 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
 
 target_include_directories(${PROJECT_NAME} PRIVATE
 	${CMAKE_CURRENT_SOURCE_DIR}
-	${CMAKE_CURRENT_SOURCE_DIR}/upstream/lib_util
-	${CMAKE_CURRENT_SOURCE_DIR}/upstream/osd
-	${CMAKE_CURRENT_SOURCE_DIR}/upstream/osd/modules/file
-	${CMAKE_CURRENT_SOURCE_DIR}/upstream/thirdparty/utf8proc
+	${CMAKE_CURRENT_SOURCE_DIR}/upstream/src/lib/util
+	${CMAKE_CURRENT_SOURCE_DIR}/upstream/src/osd
+	${CMAKE_CURRENT_SOURCE_DIR}/upstream/src/osd/modules/file
+	${CMAKE_CURRENT_SOURCE_DIR}/upstream/3rdparty/utf8proc
 	${CMAKE_SOURCE_DIR}/core/deps/libchdr/deps
 	${CMAKE_SOURCE_DIR}/core/deps/libchdr/deps/lzma-24.05/include
 	${CMAKE_SOURCE_DIR}/core/deps/libchdr/deps/zstd-1.5.6/lib

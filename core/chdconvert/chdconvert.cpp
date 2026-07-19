@@ -19,7 +19,7 @@
 #include "chdconvert.h"
 
 #include "chdwriter_mame/chdwriter_bridge.h"
-#include "chdwriter_mame/upstream/lib_util/cdrom.h"
+#include "chdwriter_mame/upstream/src/lib/util/cdrom.h"
 #include "log/Log.h"
 #include "oslib/storage.h"
 #include "stdclass.h"

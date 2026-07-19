@@ -16,7 +16,7 @@
     You should have received a copy of the GNU General Public License
     along with Hollycast.  If not, see <https://www.gnu.org/licenses/>.
  */
-#include "upstream/osd/osdcore.h"
+#include "upstream/src/osd/osdcore.h"
 
 #include <algorithm>
 #include <atomic>
