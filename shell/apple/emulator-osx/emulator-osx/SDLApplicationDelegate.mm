@@ -254,6 +254,11 @@ static void addMenuSeparator(NSMenu *menu)
 	runMenuAction([]() { GuiMenu::openCustomBoxartSettings(); });
 }
 
+- (void)openChdSystem:(id)sender
+{
+	runMenuAction([]() { GuiMenu::openChdSystemSettings(); });
+}
+
 - (void)openGeneralSettings:(id)sender
 {
 	runMenuAction([]() { GuiMenu::openGeneralSettings(); });
@@ -427,7 +432,7 @@ static void setupHollycastMenus(void)
 
 	NSMenuItem *toolsMenuItem = [[NSMenuItem alloc] initWithTitle:@"Tools" action:nil keyEquivalent:@""];
 	NSMenu *toolsMenu = [[NSMenu alloc] initWithTitle:@"Tools"];
-	addMenuItem(toolsMenu, @"CHD Convert", nil, @"", MENU_TAG_DISABLED);
+	addMenuItem(toolsMenu, @"CHD Convert", @selector(openChdSystem:), @"", 0);
 	addMenuItem(toolsMenu, @"Custom Boxart", @selector(openCustomBoxart:), @"", 0);
 	[toolsMenuItem setSubmenu:toolsMenu];
 	[[NSApp mainMenu] addItem:toolsMenuItem];

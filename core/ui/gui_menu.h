@@ -88,6 +88,7 @@ void openAudioSettings();
 void openControlsSettings();
 void openNetworkSettings();
 void openAdvancedSettings();
+void openChdSystemSettings();
 void openAboutSettings();
 bool isGameRunning();
 
