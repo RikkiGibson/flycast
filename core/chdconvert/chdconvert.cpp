@@ -40,6 +40,8 @@ static std::string extensionFromNameOrPath(const std::string& name, const std::s
 	return ext;
 }
 
+static constexpr int UNSUPPORTED_RANK = 99;
+
 static int candidateRank(const std::string& ext)
 {
 	if (ext == "gdi")
@@ -50,7 +52,7 @@ static int candidateRank(const std::string& ext)
 		return 2;
 	if (ext == "bin")
 		return 3;
-	return 99;
+	return UNSUPPORTED_RANK;
 }
 
 static std::string normalizeInputPath(const std::string& raw)
@@ -79,7 +81,7 @@ static SourceKind kindForExtension(const std::string& ext)
 static std::string firstCandidateFile(const std::string& root)
 {
 	std::string bestPath;
-	int bestRank = 99;
+	int bestRank = UNSUPPORTED_RANK;
 	try
 	{
 		const std::vector<hostfs::FileInfo> entries = hostfs::storage().listContent(root);
@@ -90,7 +92,7 @@ static std::string firstCandidateFile(const std::string& root)
 				continue;
 			const std::string ext = extensionFromNameOrPath(entry.name, entry.path);
 			const int rank = candidateRank(ext);
-			if (rank == 99)
+			if (rank == UNSUPPORTED_RANK)
 				continue;
 			supportedFiles++;
 			if (rank < bestRank)
