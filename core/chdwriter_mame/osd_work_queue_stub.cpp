@@ -107,9 +107,13 @@ static void runItem(osd_work_item *item, int threadid)
 	}
 	// Publish completion last. Waiters may release non-auto items immediately
 	// after this flag flips, so the worker must not touch the item afterward.
+	const bool autoRelease = item->autoRelease;
+	{
+		std::lock_guard<std::mutex> lock(item->mutex);
 	item->done.store(1);
 	item->cond.notify_all();
-	if (item->autoRelease)
+	}
+	if (autoRelease)
 	{
 #ifdef __ANDROID__
 		if (queue)
