@@ -110,8 +110,8 @@ static void runItem(osd_work_item *item, int threadid)
 	const bool autoRelease = item->autoRelease;
 	{
 		std::lock_guard<std::mutex> lock(item->mutex);
-	item->done.store(1);
-	item->cond.notify_all();
+		item->done.store(1);
+		item->cond.notify_all();
 	}
 	if (autoRelease)
 	{
