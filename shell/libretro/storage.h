@@ -103,6 +103,8 @@ public:
 	std::string getSubPath(const std::string& reference, const std::string& relative) override;
 	FileInfo getFileInfo(const std::string& path) override;
 	bool exists(const std::string& path) override;
+	int removeFile(const std::string& path) override;
+	int renameFile(const std::string& oldPath, const std::string& newPath) override;
 	bool addStorage(bool isDirectory, bool writeAccess, const std::string& description,
 			void (*callback)(bool cancelled, std::string selectedPath), const std::string& mimeType) override;
 };

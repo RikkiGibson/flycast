@@ -178,6 +178,16 @@ bool hostfs::LibretroStorage::exists(const std::string& path)
 	return filestream_exists(path.c_str());
 }
 
+int hostfs::LibretroStorage::removeFile(const std::string& path)
+{
+	return filestream_delete(path.c_str());
+}
+
+int hostfs::LibretroStorage::renameFile(const std::string& oldPath, const std::string& newPath)
+{
+	return filestream_rename(oldPath.c_str(), newPath.c_str());
+}
+
 bool hostfs::LibretroStorage::addStorage(bool isDirectory, bool writeAccess, const std::string& description,
 		void (*callback)(bool cancelled, std::string selectedPath), const std::string& mimeType)
 {
