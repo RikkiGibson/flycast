@@ -103,6 +103,14 @@ cmake --preset <PRESET>
 cmake --build --preset <PRESET>
 ```
 
+### Development Instructions for Android
+
+- Install [Android Studio](https://developer.android.com/studio/install).
+- Open directory `shell/android-studio` in Android Studio.
+- The Hollycast project should be picked up automatically, with "Android" sidebar on the left, and devices and run configurations in the top right.
+- `debug` build variant is used by default. If you want to build in release mode for better performance, then open **View > Tool Windows > Build Variants**, and select Active Build Variant `developerRelease`.
+   - Note that `release` variant does production code signing. It's only intended for store publishing.
+
 ### Build Instructions for Android
 
 Ensure Android Studio is installed, and then execute the following.
