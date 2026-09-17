@@ -172,6 +172,7 @@ void SaveSettings()
 void flycast_term()
 {
 	gui_cancel_load();
+	// TODO2: figure out if we actually want this
 	// Closing the window can bypass the settings exit callback, so persist the
 	// current VMU/DreamLink slot choices before controllers are torn down.
 	SaveSettings();

@@ -19,7 +19,6 @@
 #include "wsi/context.h"
 #include "ui/gui.h"
 #include "emulator.h"
-#include "ui/gui.h"
 #include "stdclass.h"
 #include "imgui.h"
 #include "hw/naomi/card_reader.h"
@@ -48,8 +47,8 @@ static u32 windowFlags;
 
 // Used only when no saved desktop window size exists.
 // These should match DEFAULT_WINDOW_WIDTH and DEFAULT_WINDOW_HEIGHT in core/linux-dist/x11.cpp
-#define WINDOW_WIDTH  800
-#define WINDOW_HEIGHT  600
+#define WINDOW_WIDTH  640
+#define WINDOW_HEIGHT  480
 
 static std::unordered_map<u32, std::shared_ptr<SDLMouse>> sdl_mice;
 static std::shared_ptr<SDLKeyboardDevice> sdl_keyboard;
@@ -67,53 +66,6 @@ static bool handleBarcodeScanner(const SDL_Event& event);
 void sdl_stopHaptic(int port);
 static void pauseHaptic();
 static void resumeHaptic();
-
-static bool isWindowFullscreen()
-{
-	if (window == nullptr)
-		return window_fullscreen;
-
-	const u32 flags = SDL_GetWindowFlags(window);
-	if ((flags & (SDL_WINDOW_FULLSCREEN | SDL_WINDOW_FULLSCREEN_DESKTOP)) != 0)
-		return true;
-
-#ifdef __APPLE__
-	// macOS uses the native system menu instead of Hollycast's ImGui menu bar,
-	// but fullscreen state still drives cursor auto-hide. SDL can miss the
-	// fullscreen flag for a display-sized macOS window, so keep a narrow bounds
-	// fallback here for cursor/state behavior without affecting normal windows.
-	int displayIndex = SDL_GetWindowDisplayIndex(window);
-	SDL_Rect displayBounds;
-	if (displayIndex >= 0 && SDL_GetDisplayBounds(displayIndex, &displayBounds) == 0)
-	{
-		SDL_Rect windowBounds;
-		SDL_GetWindowPosition(window, &windowBounds.x, &windowBounds.y);
-		SDL_GetWindowSize(window, &windowBounds.w, &windowBounds.h);
-		const int tolerance = 2;
-		return std::abs(windowBounds.x - displayBounds.x) <= tolerance
-				&& std::abs(windowBounds.y - displayBounds.y) <= tolerance
-				&& std::abs(windowBounds.w - displayBounds.w) <= tolerance
-				&& std::abs(windowBounds.h - displayBounds.h) <= tolerance;
-	}
-#endif
-
-	return false;
-}
-
-static void updateFullscreenCursorVisibility(int mouseY)
-{
-	if (!isWindowFullscreen() || !gameRunning || mouseCaptured)
-		return;
-
-	const ImGuiContext* context = ImGui::GetCurrentContext();
-	const float revealHeight = (context != nullptr ? ImGui::GetFrameHeight() : 20.0f) * 1.75f;
-	SDL_ShowCursor(mouseY <= revealHeight || gui_mouse_captured() ? SDL_ENABLE : SDL_DISABLE);
-}
-
-bool sdl_is_fullscreen()
-{
-	return isWindowFullscreen();
-}
 
 static struct SDLDeInit
 {
@@ -391,7 +343,7 @@ void input_sdl_handle()
 		switch (event.type)
 		{
 			case SDL_QUIT:
-				gui_request_exit_emulator();
+				dc_exit();
 				break;
 
 			case SDL_KEYDOWN:
@@ -425,7 +377,6 @@ void input_sdl_handle()
 							return (sdl_keyboard->get_input_mapping()->get_button_id(0, inputSet) != EMU_BTN_NONE);
 						}
 					};
-
 					if (event.type == SDL_KEYDOWN)
 					{
 						// Alt-Return and F11 toggle full screen
@@ -551,7 +502,6 @@ void input_sdl_handle()
 
 			case SDL_MOUSEMOTION:
 				gui_set_mouse_position(event.motion.x, event.motion.y, false);
-				updateFullscreenCursorVisibility(event.motion.y);
 				checkRawInput();
 				if (!config::UseRawInput)
 				{
@@ -757,13 +707,6 @@ HWND getNativeHwnd()
 }
 #endif
 
-#ifdef _WIN32
-static bool is_point_in_rect(int x, int y, const SDL_Rect& r) {
-    return (x >= r.x && x < (r.x + r.w) &&
-            y >= r.y && y < (r.y + r.h));
-}
-#endif
-
 bool sdl_recreate_window(u32 flags)
 {
 	windowFlags = flags;
@@ -861,47 +804,31 @@ bool sdl_recreate_window(u32 flags)
 	window_maximized = config::loadBool("window", "maximized", window_maximized);
 	if (window != nullptr)
 		get_window_state();
-#endif
 
-	// Workaround for Windows only
-	// This is not an issue in Linux or macOS as the window will always snap to visible area in those
-#ifdef _WIN32
-	// Ensure the top 2 corners of the window will be visible (spanning multiple monitors allowed)
-	bool topLeftVisible = false;
-	bool topRightVisible = false;
+	// Check if the saved window position is on a valid display, preventing Flycast from opening on a screen no longer pluged in
+	bool validPosition = false;
 	int numDisplays = SDL_GetNumVideoDisplays();
 	if (numDisplays > 0) {
 		for (int i = 0; i < numDisplays; i++) {
 			SDL_Rect bounds;
-			if (SDL_GetDisplayUsableBounds(i, &bounds) == 0) {
-				// windowPos doesn't include title bar
-				// Using y-1 as "top" to ensure at least 1 pixel of the title bar is visible
-				if (is_point_in_rect(windowPos.x, windowPos.y - 1, bounds)) {
-					topLeftVisible = true;
-				}
-
-				if (is_point_in_rect(windowPos.x + windowPos.w - 1, windowPos.y - 1, bounds)) {
-					topRightVisible = true;
-				}
-
-				if (topLeftVisible && topRightVisible) {
-					// Window confirmed visible
+			if (SDL_GetDisplayBounds(i, &bounds) == 0) {
+				// Check if the window position is inside this display
+				if (windowPos.x >= bounds.x && windowPos.x < bounds.x + bounds.w &&
+					windowPos.y >= bounds.y && windowPos.y < bounds.y + bounds.h) {
+					validPosition = true;
 					break;
 				}
 			}
 		}
 
-		// If position is invalid, reset to defaults
-		if (!topLeftVisible || !topRightVisible) {
+		// If position is invalid, reset to primary display, avoiding Flycast from opening in a missing window and not being seen when windowed
+		if (!validPosition) {
 			NOTICE_LOG(COMMON, "Saved window position is not on any connected display, resetting to primary display");
 			windowPos.x = SDL_WINDOWPOS_UNDEFINED;
 			windowPos.y = SDL_WINDOWPOS_UNDEFINED;
-			windowPos.w = WINDOW_WIDTH;
-			windowPos.h = WINDOW_HEIGHT;
 		}
 	}
 #endif
-
 	if (window != nullptr)
 	{
 		SDL_DestroyWindow(window);
@@ -1025,7 +952,7 @@ static int suspendEventFilter(void *userdata, SDL_Event *event)
             try {
                 emu.stop();
                 if (config::AutoSaveState)
-                    dc_savestate(dc_getAutoSaveSlot());
+                    dc_savestate(config::SavestateSlot);
             } catch (const FlycastException& e) { }
         }
         return 0;

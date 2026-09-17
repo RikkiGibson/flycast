@@ -1,6 +1,5 @@
 /*
 	Copyright 2019 flyinghead
-	Portions Copyright 2026 The Hollycast Authors
 
 	This file is part of reicast.
 
@@ -22,7 +21,6 @@
 
 #include <string>
 #include <functional>
-#include <chrono>
 
 void gui_init();
 void gui_updateStyle();
@@ -42,35 +40,21 @@ void gui_keyboard_key(u8 keyCode, bool pressed);
 bool gui_keyboard_captured();
 bool gui_mouse_captured();
 void gui_set_mouse_position(int x, int y, bool touchscreen);
-bool gui_is_menu_touch_target(float x, float y);
 // 0: left, 1: right, 2: middle/wheel, 3: button 4
 void gui_set_mouse_button(int button, bool pressed, bool touchscreen);
 void gui_set_mouse_wheel(float delta);
 void gui_set_insets(int left, int right, int top, int bottom);
-void gui_stop_game(const std::string& message = "", bool allowAutoSave = true);
-void gui_request_exit_to_library();
-void gui_request_exit_emulator();
-void gui_request_initial_auto_load();
+void gui_stop_game(const std::string& message = "");
 void gui_start_game(const std::string& path);
 void gui_error(const std::string& what);
 void gui_setOnScreenKeyboardCallback(void (*callback)(bool show));
-void gui_loadState(int slot);
 void gui_loadState(bool inRam = false);
-void gui_saveState(int slot, bool stopRestart);
 void gui_saveState(bool stopRestart = true, bool inRam = false);
 void gui_cycleSaveStateSlot(int step);
 void gui_togglePause();
 std::string gui_getCurGameBoxartUrl();
-void gui_refresh_boxart_cache();
-void gui_refresh_custom_boxart(bool force = true);
 void gui_takeScreenshot();
 void gui_runOnUiThread(std::function<void()> function);
-void gui_runOnUiThread(const std::chrono::steady_clock::time_point& tp, const std::function<void()>& function);
-
-template <typename Rep, typename Period>
-void gui_runOnUiThread(std::chrono::duration<Rep, Period> duration, const std::function<void()>& function) {
-	gui_runOnUiThread(std::chrono::steady_clock::now() + duration, function);
-}
 
 enum class GuiState {
 	Closed,
@@ -86,12 +70,8 @@ enum class GuiState {
 	NetworkStart,
 	Cheats,
 	Achievements,
-	GameInfo,
 };
 extern GuiState gui_state;
-
-// Exit save dialog flag
-extern bool showExitSaveDialog;
 
 void gui_setState(GuiState newState);
 

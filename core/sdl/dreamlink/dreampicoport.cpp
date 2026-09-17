@@ -25,7 +25,7 @@
 
 #include "hw/maple/maple_devs.h"
 #include "hw/maple/maple_if.h"
-#include "ui/boxart/vmu_icon.h"
+#include "ui/boxart/vmu_icon.h" // TODO2: error C1083: Cannot open include file: 'ui/boxart/vmu_icon.h': No such file or directory
 #include "ui/gui.h"
 #include "cfg/option.h"
 #include "oslib/i18n.h"
