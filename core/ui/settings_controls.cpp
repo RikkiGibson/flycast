@@ -21,12 +21,11 @@
 #include "IconsFontAwesome6.h"
 #include "input/gamepad_device.h"
 #include "input/keyboard_device.h"
+#include "input/maplelinkregistry.h"
 #include "input/mouse.h"
 #include "hw/maple/maple_devs.h"
 #include "vgamepad.h"
 #include "oslib/storage.h"
-
-// TODO2: backport settings_new dreamlink changes
 
 #ifdef USE_DREAMLINK_DEVICES
 #include "sdl/dreamlink/dreamlinkgamepad.h"
@@ -1006,14 +1005,14 @@ void gui_settings_controls(std::array<bool, 4>& mapleDevicesChanges, std::array<
 	uiLanguageHandler.init();
 
 	header(T("Physical Devices"));
-    {
+	{
 		if (ImGui::BeginTable("physicalDevices", 5, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_NoSavedSettings))
 		{
 			ImGui::TableSetupColumn(T("System"), ImGuiTableColumnFlags_WidthFixed);
 			ImGui::TableSetupColumn(T("Name"), ImGuiTableColumnFlags_WidthStretch);
-			ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed);
+			ImGui::TableSetupColumn(T("Status"), ImGuiTableColumnFlags_WidthFixed);
+			ImGui::TableSetupColumn(T("Actions"), ImGuiTableColumnFlags_WidthFixed);
 			ImGui::TableSetupColumn(T("Port"), ImGuiTableColumnFlags_WidthFixed);
-			ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed);
 
 			const float portComboWidth = calcComboWidth(maple_ports, std::size(maple_ports));
 			const ImVec4 gray{ 0.5f, 0.5f, 0.5f, 1.f };
@@ -1025,7 +1024,13 @@ void gui_settings_controls(std::array<bool, 4>& mapleDevicesChanges, std::array<
 			ImGui::TableSetColumnIndex(1);
 			ImGui::TextColored(gray, "%s", T("Name"));
 
+			ImGui::TableSetColumnIndex(2);
+			ImGui::TextColored(gray, "%s", T("Status"));
+
 			ImGui::TableSetColumnIndex(3);
+			ImGui::TextColored(gray, "%s", T("Actions"));
+
+			ImGui::TableSetColumnIndex(4);
 			ImGui::TextColored(gray, "%s", T("Port"));
 
 			for (int i = 0; i < GamepadDevice::GetGamepadCount(); i++)
@@ -1033,6 +1038,7 @@ void gui_settings_controls(std::array<bool, 4>& mapleDevicesChanges, std::array<
 				std::shared_ptr<GamepadDevice> gamepad = GamepadDevice::GetGamepad(i);
 				if (!gamepad)
 					continue;
+
 				ImGui::TableNextRow();
 				ImGui::TableSetColumnIndex(0);
 				ImGui::Text("%s", gamepad->api_name().c_str());
@@ -1044,16 +1050,18 @@ void gui_settings_controls(std::array<bool, 4>& mapleDevicesChanges, std::array<
 				ImGui::TableSetColumnIndex(2);
 				DreamLinkGamepad* dreamLinkGamepad = dynamic_cast<DreamLinkGamepad*>(gamepad.get());
 				if (dreamLinkGamepad != nullptr) {
-					ImGui::Text(T("DreamLink: %s"), dreamLinkGamepad->dreamLinkStatus());
+					ImGui::Text("%s", dreamLinkGamepad->dreamLinkStatus());
 				}
 #endif
 
-				ImGui::TableSetColumnIndex(3);
+				ImGui::TableSetColumnIndex(4);
 				char port_name[32];
 				snprintf(port_name, sizeof(port_name), "##mapleport%d", i);
 				ImguiID _(port_name);
 				ImGui::SetNextItemWidth(portComboWidth);
-				if (ImGui::BeginCombo(port_name, maple_ports[gamepad->maple_port() + 1]))
+
+				const char* current_port = maple_ports[gamepad->maple_port() + 1];
+				if (ImGui::BeginCombo(port_name, current_port))
 				{
 					for (int j = -1; j < (int)std::size(maple_ports) - 1; j++)
 					{
@@ -1067,7 +1075,7 @@ void gui_settings_controls(std::array<bool, 4>& mapleDevicesChanges, std::array<
 					ImGui::EndCombo();
 				}
 
-				ImGui::TableSetColumnIndex(4);
+				ImGui::TableSetColumnIndex(3);
 				ImGui::SameLine(0, uiScaled(8));
 				if (gamepad->remappable() && ImGui::Button(T("Map")))
 				{
@@ -1108,16 +1116,120 @@ void gui_settings_controls(std::array<bool, 4>& mapleDevicesChanges, std::array<
 
 	ImGui::Spacing();
 	header(T("Dreamcast Devices"));
-    {
+	{
+
+		// Helper lambda to get device name
+		auto maple_device_name = [](MapleDeviceType type) -> const char* {
+			switch (type)
+			{
+			case MDT_SegaController: return maple_device_types[1];
+			case MDT_LightGun: return maple_device_types[2];
+			case MDT_Keyboard: return maple_device_types[3];
+			case MDT_Mouse: return maple_device_types[4];
+			case MDT_TwinStick: return maple_device_types[5];
+			case MDT_AsciiStick: return maple_device_types[6];
+			case MDT_MaracasController: return maple_device_types[7];
+			case MDT_FishingController: return maple_device_types[8];
+			case MDT_PopnMusicController: return maple_device_types[9];
+			case MDT_RacingController: return maple_device_types[10];
+			case MDT_DenshaDeGoController: return maple_device_types[11];
+			case MDT_SegaControllerXL: return maple_device_types[12];
+			case MDT_None: default: return maple_device_types[0];
+			}
+		};
+
+		// Helper lambda for device type conversion
+		auto maple_device_type_from_index = [](int idx) -> MapleDeviceType {
+			switch (idx)
+			{
+			case 1: return MDT_SegaController;
+			case 2: return MDT_LightGun;
+			case 3: return MDT_Keyboard;
+			case 4: return MDT_Mouse;
+			case 5: return MDT_TwinStick;
+			case 6: return MDT_AsciiStick;
+			case 7: return MDT_MaracasController;
+			case 8: return MDT_FishingController;
+			case 9: return MDT_PopnMusicController;
+			case 10: return MDT_RacingController;
+			case 11: return MDT_DenshaDeGoController;
+			case 12: return MDT_SegaControllerXL;
+			case 0: default: return MDT_None;
+			}
+		};
+
 		bool is_there_any_xhair = false;
 		if (ImGui::BeginTable("dreamcastDevices", 4, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_NoSavedSettings,
 				ImVec2(0, 0), uiScaled(8)))
 		{
-			const float mainComboWidth = calcComboWidth((const char **)maple_device_types, std::size(maple_device_types));
-			const float expComboWidth = calcComboWidth((const char **)maple_expansion_device_types, std::size(maple_expansion_device_types));
+			const float comboWidthPadding = ImGui::GetStyle().FramePadding.x * 2.0f + ImGui::GetFrameHeight();
+			float mainComboWidth = calcComboWidth((const char **)maple_device_types, std::size(maple_device_types));
+
+			// Externally managed expansion device types
+			static constexpr int MDT_DreamPotato = MDT_Count;
+			static constexpr int MDT_DreamLink = MDT_Count + 1;
+
+			struct MapleExpansionDeviceDesc
+			{
+				int deviceType;
+				const char* name;
+			};
+
+			const std::list<MapleExpansionDeviceDesc> static_maple_expansion_device_types = {
+				{MDT_None, T("None")},
+				{MDT_SegaVMU, T("Sega VMU")},
+				{MDT_PurupuruPack, T("Vibration Pack")},
+				{MDT_Microphone, T("Microphone")},
+				{MDT_DreamPotato, T("DreamPotato")},
+			};
+
+			float expComboWidth = comboWidthPadding;
+			for (const auto& devIter : static_maple_expansion_device_types)
+			{
+				expComboWidth = std::max(
+					ImGui::CalcTextSize(devIter.name).x + comboWidthPadding,
+					expComboWidth
+				);
+			}
+
+			// DreamLink device names for main device
+			const char* dream_link_names[MAPLE_PORTS]{};
+			const char* dream_link_ext_labels[MAPLE_PORTS]{};
+			for (int bus = 0; bus < MAPLE_PORTS; bus++)
+			{
+				auto link = MapleLinkRegistry::GetMapleLink(bus, MAPLE_MAIN_DEV_IDX); // Registered controller, if any
+				if (link && (link->dreamlink->getIssueDescription() == nullptr))
+				{
+					dream_link_names[bus] = link->dreamlink->getName();
+					mainComboWidth = std::max(
+						ImGui::CalcTextSize(dream_link_names[bus]).x + comboWidthPadding,
+						mainComboWidth
+					);
+
+					dream_link_ext_labels[bus] = link->dreamlink->getProductName();
+					expComboWidth = std::max(
+						ImGui::CalcTextSize(dream_link_ext_labels[bus]).x + comboWidthPadding,
+						expComboWidth
+					);
+				}
+				else
+				{
+					dream_link_names[bus] = "";
+					dream_link_ext_labels[bus] = "";
+				}
+			}
 
 			for (int bus = 0; bus < MAPLE_PORTS; bus++)
 			{
+				const char* dream_link_name = dream_link_names[bus];
+				const bool has_dream_link = (*dream_link_name != '\0');
+				const char* selected_name = nullptr;
+
+				if (has_dream_link)
+					selected_name = dream_link_name;
+				else
+					selected_name = maple_device_name(config::MapleMainDevices[bus]);
+
 				ImGui::TableNextRow();
 				ImGui::TableSetColumnIndex(0);
 				ImGui::Text(T("Port %c"), bus + 'A');
@@ -1128,8 +1240,21 @@ void gui_settings_controls(std::array<bool, 4>& mapleDevicesChanges, std::array<
 				float w = ImGui::CalcItemWidth() / 3;
 				ImGui::PushItemWidth(w);
 				ImGui::SetNextItemWidth(mainComboWidth);
-				if (ImGui::BeginCombo(device_name, maple_device_name(config::MapleMainDevices[bus]), ImGuiComboFlags_None))
+
+				if (has_dream_link)
 				{
+					// Using real hardware for this - disable selection
+					ImGui::BeginDisabled();
+				}
+
+				if (ImGui::BeginCombo(device_name, selected_name, ImGuiComboFlags_None))
+				{
+#if defined(__ANDROID__)
+					// TODO2: double check if change is still needed
+					// BeginCombo has no window-flags argument. Opt this popup into
+					// the existing touch-drag handling before submitting its rows.
+					ImGui::GetCurrentWindow()->Flags |= ImGuiWindowFlags_DragScrolling;
+#endif
 					for (int i = 0; i < IM_ARRAYSIZE(maple_device_types); i++)
 					{
 						bool is_selected = config::MapleMainDevices[bus] == maple_device_type_from_index(i);
@@ -1141,26 +1266,71 @@ void gui_settings_controls(std::array<bool, 4>& mapleDevicesChanges, std::array<
 						if (is_selected)
 							ImGui::SetItemDefaultFocus();
 					}
+#if defined(__ANDROID__)
+					scrollWhenDraggingOnVoid();
+					windowDragScroll(false);
+#endif
 					ImGui::EndCombo();
 				}
-				int port_count = maple_getPortCount(config::MapleMainDevices[bus]);
+
+				std::list<MapleExpansionDeviceDesc> maple_expansion_device_types = static_maple_expansion_device_types;
+				int port_count = 0;
+				if (has_dream_link)
+				{
+					// Using real hardware for this - done with disable section
+					ImGui::EndDisabled();
+
+					port_count = 2;
+					maple_expansion_device_types.push_back({MDT_DreamLink, dream_link_ext_labels[bus]});
+				}
+				else
+				{
+					port_count = maple_getPortCount(config::MapleMainDevices[bus]);
+				}
+
 				for (int port = 0; port < port_count; port++)
 				{
+					const bool port_has_dream_link = has_dream_link && (MapleLinkRegistry::GetMapleLink(bus, port) != std::nullopt);
+
 					ImGui::TableSetColumnIndex(2 + port);
 					snprintf(device_name, sizeof(device_name), "##device%d.%d", bus, port + 1);
 					ImguiID _(device_name);
 					ImGui::SetNextItemWidth(expComboWidth);
 					int subtype = config::MapleExpansionDevices[bus][port];
-					if (subtype == MDT_SegaVMU && config::NetworkExpansionDevices[bus][port] == 1)
+					if (subtype == MDT_SegaVMU && config::NetworkExpansionDevices[bus][port] == 1) {
 						subtype = MDT_DreamPotato;
-					if (ImGui::BeginCombo(device_name, maple_expansion_device_name((MapleDeviceType)subtype), ImGuiComboFlags_None))
+					}
+					else if (port_has_dream_link && (config::DreamLinkSelect[bus][port])) {
+						subtype = MDT_DreamLink;
+					}
+
+					auto selectedDevIter = std::find_if(
+						maple_expansion_device_types.begin(),
+						maple_expansion_device_types.end(),
+						[subtype](const MapleExpansionDeviceDesc& dev){return subtype == dev.deviceType;}
+					);
+					if (selectedDevIter == maple_expansion_device_types.end())
+						selectedDevIter = maple_expansion_device_types.begin(); // Use None as default
+
+					if (ImGui::BeginCombo(device_name, selectedDevIter->name, ImGuiComboFlags_None))
 					{
-						for (int i = 0; i < IM_ARRAYSIZE(maple_expansion_device_types); i++)
+#if defined(__ANDROID__)
+						// Expansion-device lists use the same vertical touch scrolling.
+						ImGui::GetCurrentWindow()->Flags |= ImGuiWindowFlags_DragScrolling;
+#endif
+						for (const auto& devIter : maple_expansion_device_types)
 						{
-							bool is_selected = subtype == maple_expansion_device_type_from_index(i);
-							if (ImGui::Selectable(maple_expansion_device_types[i], &is_selected))
+							bool is_selected = (selectedDevIter->deviceType == devIter.deviceType);
+							if (ImGui::Selectable(devIter.name, &is_selected))
 							{
-								subtype = maple_expansion_device_type_from_index(i);
+								subtype = devIter.deviceType;
+								if (subtype == MDT_DreamLink) {
+									config::DreamLinkSelect[bus][port] = true;
+								}
+								else if (port_has_dream_link) {
+									config::DreamLinkSelect[bus][port] = false;
+								}
+
 								if (subtype == MDT_DreamPotato) {
 									config::MapleExpansionDevices[bus][port] = MDT_SegaVMU;
 									config::NetworkExpansionDevices[bus][port] = 1;
@@ -1174,9 +1344,15 @@ void gui_settings_controls(std::array<bool, 4>& mapleDevicesChanges, std::array<
 							if (is_selected)
 								ImGui::SetItemDefaultFocus();
 						}
+#if defined(__ANDROID__)
+						scrollWhenDraggingOnVoid();
+						windowDragScroll(false);
+#endif
 						ImGui::EndCombo();
 					}
 				}
+
+				// Light gun crosshair color
 				if (config::MapleMainDevices[bus] == MDT_LightGun)
 				{
 					ImGui::TableSetColumnIndex(3);
@@ -1217,15 +1393,36 @@ void gui_settings_controls(std::array<bool, 4>& mapleDevicesChanges, std::array<
 			ImGui::EndTable();
 		}
 		OptionCheckbox(T("Per Game VMU A1"), config::PerGameVmu, T("When enabled, each game has its own VMU on port 1 of controller A."));
+
+#ifdef USE_DREAMLINK_DEVICES
 		{
 			DisabledScope scope(game_started);
-			OptionCheckbox(T("Use Physical VMU Storage"), config::UsePhysicalVmuMemory,
-					T("Enables read and write access to physical VMU storage via DreamPicoPort or DreamPotato. "
-				"This is not compatible with load state events."));
+			OptionCheckbox(
+				T("Use External VMU Storage"),
+				config::UsePhysicalVmuMemory,
+				T("Enables read and write access to physical/external VMU storage via DreamPicoPort or DreamPotato. "
+					"VMUs may appear to reconnect after loading state."));
 		}
+#endif
+
+#ifdef DREAMPOTATO_INTEGRATED_MODE
+		{
+			DisabledScope scope(game_started);
+			OptionCheckbox(
+				T("DreamPotato Integrated Mode"),
+				config::DreamPotatoIntegratedMode,
+				T("Automatically launch DreamPotato (VMU emulator) using the standard VMU file for the given slot."));
+		}
+
+		if (config::DreamPotatoIntegratedMode && hostfs::getDreamPotatoPath().empty())
+		{
+			ImVec4 warningColor = ImGui::GetStyle().Colors[ImGuiCol_ButtonHovered];
+			ImGui::TextColored(warningColor, "%s", T("(!) DreamPotato executable not found. Please set DreamPotato Path in General > Custom Paths."));
+		}
+#endif
 		{
 			DisabledScope scope(!is_there_any_xhair);
 			OptionSlider(T("Crosshair Size"), config::CrosshairSize, 10, 100);
 		}
-    }
+	}
 }
