@@ -1268,7 +1268,7 @@ void gui_settings_controls(std::array<bool, 4>& mapleDevicesChanges, std::array<
 					}
 #if defined(__ANDROID__)
 					scrollWhenDraggingOnVoid();
-					windowDragScroll(false);
+					windowDragScroll();
 #endif
 					ImGui::EndCombo();
 				}
@@ -1346,7 +1346,7 @@ void gui_settings_controls(std::array<bool, 4>& mapleDevicesChanges, std::array<
 						}
 #if defined(__ANDROID__)
 						scrollWhenDraggingOnVoid();
-						windowDragScroll(false);
+						windowDragScroll();
 #endif
 						ImGui::EndCombo();
 					}
