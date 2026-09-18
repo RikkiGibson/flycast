@@ -156,5 +156,3 @@ static void registerForEvents()
 	EventManager::listen(Event::Terminate, callback);
 	EventManager::listen(Event::LoadState, callback);
 }
-
-
