@@ -472,6 +472,12 @@ void gui_settings_general()
     		T("Folder where VMU (.bin) saves are stored"));
     ImGui::Spacing();
 
+#ifdef DREAMPOTATO_INTEGRATED_MODE
+	manageSinglePath("DreamPotato Path", T("Select the DreamPotato folder"), config::DreamPotatoFolderPath,
+		T("Folder where DreamPotato executable is stored"));
+	ImGui::Spacing();
+#endif
+
     managePathList(T("Savestate Folders"), T("Select a savestate folder"), config::SavestatePath.get(),
     		T("Folders for save states. First path is used for new states; all are searched when loading"));
     ImGui::Spacing();
