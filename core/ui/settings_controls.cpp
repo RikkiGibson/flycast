@@ -28,8 +28,8 @@
 
 // TODO2: backport settings_new dreamlink changes
 
-#if defined(USE_SDL)
-#include "sdl/dreamlink.h" // For USE_DREAMCASTCONTROLLER // TODO2: error C1083: Cannot open include file: 'sdl/dreamlink.h': No such file or directory
+#ifdef USE_DREAMLINK_DEVICES
+#include "sdl/dreamlink/dreamlinkgamepad.h"
 #endif
 
 static float calcComboWidth(const char *labels[], size_t size)

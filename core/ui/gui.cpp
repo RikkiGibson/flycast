@@ -94,7 +94,7 @@ static std::recursive_mutex guiMutex;
 using LockGuard = std::lock_guard<std::recursive_mutex>;
 
 static Toast toast;
-static ThreadRunner uiThreadRunner;
+static ScheduledThreadRunner<std::chrono::steady_clock::time_point> uiThreadRunner;
 
 static void emuEventCallback(Event event, void *)
 {
@@ -1429,7 +1429,7 @@ void gui_display_ui()
 	error_popup();
     ImGui::Render();
 	gui_endFrame(gui_open);
-	uiThreadRunner.execTasks();
+	uiThreadRunner.execTasks(std::chrono::steady_clock::now());
 	ImguiFileTexture::resetLoadCount();
 
 	if (gui_state == GuiState::Closed)
@@ -1501,7 +1501,7 @@ void gui_draw_osd()
 		lua::overlay();
 	vgamepad::draw();
     ImGui::Render();
-	uiThreadRunner.execTasks();
+	uiThreadRunner.execTasks(std::chrono::steady_clock::now());
 }
 
 void gui_display_osd() {
@@ -1695,6 +1695,10 @@ std::string gui_getCurGameBoxartUrl()
 
 void gui_runOnUiThread(std::function<void()> function) {
 	uiThreadRunner.runOnThread(function);
+}
+
+void gui_runOnUiThread(const std::chrono::steady_clock::time_point& tp, const std::function<void()>& function) {
+	uiThreadRunner.runOnThread(tp, function);
 }
 
 void gui_takeScreenshot()
