@@ -163,7 +163,7 @@ struct DreamPotatoVmu : public MapleLinkVmu
 				{
 				case MDCF_BlockWrite:
 				{
-					if (!userNotified)
+					if (!config::DreamPotatoIntegratedMode && !userNotified)
 					{
 						os_notify("ATTENTION: You are saving to a physical VMU", 6000,
 								"Do not disconnect the VMU or close the game");
