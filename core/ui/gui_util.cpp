@@ -356,12 +356,17 @@ public:
 		// │ help             │
 		// │ ---------------- │
 		// └──────────────────┘
+		// - Render 'name' (and containing box) as a Selectable.
+		// - Render 'help', 'value' and separator using manual positioning.
+
 		ImVec2 initialScreenPos = ImGui::GetCursorScreenPos();
 		float availableWidth = ImGui::GetContentRegionAvail().x;
-		selected = ImGui::IsPopupOpen(name); // TODO2: internal api
+		selected = ImGui::IsPopupOpen(name); // TODO2: get rid of internal api
+		ImGui::PushFont(regularFont, uiScaled(21.0f));
 		if (ImGui::Selectable(name, &selected, ImGuiSelectableFlags_None, ScaledVec2(0, 40))) {
 			ImGui::OpenPopup(name);
 		}
+		ImGui::PopFont();
 		ImVec2 finalScreenPos = ImGui::GetCursorScreenPos();
 		ImGui::SetCursorScreenPos(ImVec2(finalScreenPos.x, finalScreenPos.y - ImGui::GetStyle().FramePadding.y));
 		ImGui::Separator();
@@ -372,15 +377,18 @@ public:
 			ImVec2 helpPos(initialScreenPos.x, initialScreenPos.y + nameTextSize.y + ImGui::GetStyle().ItemSpacing.y);
 			ImGui::SetCursorScreenPos(helpPos);
 
-			ImGui::PushFont(settingsTitleFont);
+			ImGui::PushFont(settingsTitleFont, 0.0f);
 			ImGui::TextUnformatted(help);
 			ImGui::PopFont();
 		}
 
 		ImVec2 valueTextSize = ImGui::CalcTextSize(value);
-		ImVec2 valuePos(initialScreenPos.x + availableWidth - valueTextSize.x, initialScreenPos.y);
+		ImVec2 valuePos(initialScreenPos.x + availableWidth - valueTextSize.x - ImGui::GetStyle().ItemSpacing.x, initialScreenPos.y);
 		ImGui::SetCursorScreenPos(valuePos);
+
+		ImGui::PushFont(settingsValueFont, uiScaled(24.0f));
 		ImGui::TextUnformatted(value);
+		ImGui::PopFont();
 
 		ImGui::SetCursorScreenPos(finalScreenPos);
 
@@ -390,6 +398,14 @@ public:
 	void EndCombo()
 	{
 		ImGui::EndPopup();
+	}
+
+	bool Selectable(const char* label, bool* selected)
+	{
+		ImGui::PushFont(settingsTitleFont, 0.0f);
+		bool pressed = ImGui::Selectable(label, selected);
+		ImGui::PopFont();
+		return pressed;
 	}
 };
 
@@ -408,7 +424,7 @@ void OptionComboBox(const char *name, config::Option<int, PerGameOption>& option
 			for (int i = 0; i < count; i++)
 			{
 				bool is_selected = option == i;
-				if (ImGui::Selectable(values[i], &is_selected))
+				if (comboBox.Selectable(values[i], &is_selected))
 					option = i;
 				if (is_selected)
 					ImGui::SetItemDefaultFocus();

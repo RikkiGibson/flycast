@@ -23,6 +23,7 @@
 #include "IconsFontAwesome6.h"
 #include "imgui/misc/freetype/imgui_freetype.h"
 
+ImFont *regularFont;
 ImFont *boldFont;
 ImFont *settingsTitleFont;
 ImFont *settingsValueFont;
@@ -276,10 +277,13 @@ void gui_loadFonts()
 	const float fontSize = uiScaled(17.f);
 
 	ImFontConfig fontConfig = beginLoadOneFont(io, "Regular", "fonts/Roboto-Medium.ttf", fontSize);
+	regularFont = fontConfig.DstFont;
 	ImFontConfig boldFontConfig = beginLoadOneFont(io, "Bold", "fonts/Roboto-Bold.ttf", fontSize);
 	boldFont = boldFontConfig.DstFont;
 	ImFontConfig settingsTitleFontConfig = beginLoadOneFont(io, "Settings Title", "fonts/Jura-wght.ttf", fontSize);
 	settingsTitleFont = settingsTitleFontConfig.DstFont;
+	ImFontConfig settingsValueFontConfig = beginLoadOneFont(io, "Settings Value", "fonts/EncodeSans-wdth-wght.ttf", fontSize);
+	settingsValueFont = settingsValueFontConfig.DstFont;
 
 	std::vector<FontEntry> fonts;
 	std::vector<FontEntry> boldFonts;
@@ -473,21 +477,24 @@ void gui_loadFonts()
 	loadFonts(fonts, fontConfig);
 	loadFonts(boldFonts, boldFontConfig);
 	loadFonts(fonts, settingsTitleFontConfig);
+	loadFonts(boldFonts, settingsValueFontConfig);
 	
 	// Font Awesome symbols
 	size_t dataSize;
-	auto data = resource::load("fonts/" FONT_ICON_FILE_NAME_FAS, dataSize);
+	u8* data = resource::load("fonts/" FONT_ICON_FILE_NAME_FAS, dataSize).release();
 	verify(data != nullptr);
 	
 	ImFontConfig faFontConfig = fontConfig;
 	faFontConfig.FontDataOwnedByAtlas = false;
-	io.Fonts->AddFontFromMemoryTTF(data.get(), (int)dataSize, fontSize, &faFontConfig);
+	io.Fonts->AddFontFromMemoryTTF(data, (int)dataSize, fontSize, &faFontConfig);
 	boldFontConfig.FontDataOwnedByAtlas = false;
-	io.Fonts->AddFontFromMemoryTTF(data.get(), (int)dataSize, fontSize, &boldFontConfig);
+	io.Fonts->AddFontFromMemoryTTF(data, (int)dataSize, fontSize, &boldFontConfig);
+	settingsTitleFontConfig.FontDataOwnedByAtlas = false;
+	io.Fonts->AddFontFromMemoryTTF(data, (int)dataSize, fontSize, &settingsTitleFontConfig);
 
 	// Only the last call can take ownership (avoid deleting data multiple times)
-	settingsTitleFontConfig.FontDataOwnedByAtlas = true;
-	io.Fonts->AddFontFromMemoryTTF(data.release(), (int)dataSize, fontSize, &settingsTitleFontConfig);
+	settingsValueFontConfig.FontDataOwnedByAtlas = true;
+	io.Fonts->AddFontFromMemoryTTF(data, (int)dataSize, fontSize, &settingsValueFontConfig);
 
 	// AddFont() may sync the active ImGui font stack using the previous size.
 	// Re-apply the rebuilt atlas size after all fonts have been registered.

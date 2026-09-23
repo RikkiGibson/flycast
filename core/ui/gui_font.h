@@ -20,5 +20,7 @@
 #include "imgui.h"
 
 void gui_loadFonts();
+
+extern ImFont* regularFont;
 extern ImFont* settingsTitleFont;
-// extern ImFont* settingsValueFont;
+extern ImFont* settingsValueFont;
