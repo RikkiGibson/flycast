@@ -35,7 +35,8 @@ if(NOT LIBRETRO)
     cmrc_add_resources(Hollycast-resources
             fonts/Roboto-Medium.ttf.zip
             fonts/Roboto-Bold.ttf.zip
-            fonts/fa-solid-900.ttf.zip)
+            fonts/fa-solid-900.ttf.zip
+            fonts/Jura-wght.ttf.zip)
     if(ANDROID OR IOS)
         cmrc_add_resources(Hollycast-resources
                 WHENCE resources

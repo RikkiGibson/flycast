@@ -349,6 +349,30 @@ void OptionComboBox(const char *name, config::Option<int, PerGameOption>& option
 		DisabledScope scope(option.isReadOnly());
 
 		const char *value = option >= 0 && option < count ? values[option] : "?";
+
+		ImGui::PushID("Test");
+		if (ImGui::Selectable(name, false, ImGuiSelectableFlags_None, ScaledVec2(0, 40)))
+		{
+			ImGui::OpenPopup(name);
+		}
+
+		ImGui::SetNextWindowPos(ImVec2(ImGui::GetContentRegionAvail().x - uiScaled(150), ImGui::GetCursorPosY()));
+		if (ImGui::BeginPopup(name))
+		{
+			for (int i = 0; i < count; i++)
+			{
+				bool is_selected = option == i;
+				if (ImGui::Selectable(values[i], &is_selected)) {
+					option = i;
+					ImGui::CloseCurrentPopup();
+				}
+				if (is_selected)
+					ImGui::SetItemDefaultFocus();
+			}
+			ImGui::EndPopup();
+		}
+		ImGui::PopID();
+
 		if (ImGui::BeginCombo(name, value, ImGuiComboFlags_None))
 		{
 			for (int i = 0; i < count; i++)

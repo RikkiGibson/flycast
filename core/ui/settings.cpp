@@ -29,6 +29,8 @@
 #include "hw/mem/addrspace.h"
 #endif
 
+extern ImFont *settingsTitleFont;
+
 static void gui_settings_advanced()
 {
 #if FEAT_SHREC != DYNAREC_NONE
@@ -240,7 +242,9 @@ public:
 
 		bool isActiveTab = activeLabel == label;
 		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ScaledVec2(6, 12));
+		ImGui::PushFont(settingsTitleFont, 0.0f);
 		bool pressed = ImGui::Selectable(fullLabel.c_str(), isActiveTab);
+		ImGui::PopFont();
 		ImGui::PopStyleVar();
 		if (pressed) {
 			// Delay changing the active selectable until the next frame.
@@ -266,6 +270,7 @@ public:
 void gui_display_settings_header(ImVec2 normal_padding, std::array<bool, 4>& mapleDevicesChanges, std::array<std::array<bool, 2>, 4>& expDevicesChanges)
 {
 	ImguiStyleVar _(ImGuiStyleVar_FramePadding, normal_padding);
+	ImGui::PushFont(settingsTitleFont, 0.0f);
 
 	auto availableWidth = ImGui::GetContentRegionAvail().x;
     if (ImGui::Button(T("Done"), ImVec2(availableWidth, uiScaled(30))))
@@ -323,6 +328,7 @@ void gui_display_settings_header(ImVec2 normal_padding, std::array<bool, 4>& map
 	}
 
 	ImGui::Spacing();
+	ImGui::PopFont();
 }
 
 void gui_display_settings()
