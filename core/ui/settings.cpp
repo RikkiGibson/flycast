@@ -157,19 +157,20 @@ static void gui_debug_tab()
 		ImGui::Spacing();
 
 		static const char *levels[] = { "Notice", "Error", "Warning", "Info", "Debug" };
-		if (ImGui::BeginCombo("Log Verbosity", levels[logManager->GetLogLevel() - 1], ImGuiComboFlags_None))
+		static ComboBoxRow logVerbosityCombo;
+		if (logVerbosityCombo.BeginCombo("Log Verbosity", levels[logManager->GetLogLevel() - 1], ImGuiComboFlags_None))
 		{
 			for (std::size_t i = 0; i < std::size(levels); i++)
 			{
 				bool is_selected = logManager->GetLogLevel() - 1 == (int)i;
-				if (ImGui::Selectable(levels[i], &is_selected)) {
+				if (logVerbosityCombo.Selectable(levels[i], &is_selected)) {
 					logManager->SetLogLevel((LogTypes::LOG_LEVELS)(i + 1));
 					config::saveInt("log", "Verbosity", i + 1);
 				}
 				if (is_selected)
 					ImGui::SetItemDefaultFocus();
 			}
-			ImGui::EndCombo();
+			logVerbosityCombo.EndCombo();
 		}
 		InputText("Log Server", &config::LogServer.get(), ImGuiInputTextFlags_CharsNoBlank | ImGuiInputTextFlags_CallbackCharFilter, dnsCharFilter);
         ImGui::SameLine();

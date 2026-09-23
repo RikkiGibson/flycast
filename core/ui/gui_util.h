@@ -49,6 +49,21 @@ template<bool PerGameOption>
 bool OptionSlider(const char *name, config::Option<int, PerGameOption>& option, int min, int max, const char *help = nullptr, const char *format = nullptr);
 template<typename T>
 bool OptionRadioButton(const char *name, config::Option<T>& option, T value, const char *help = nullptr);
+
+// Renders a combo box with optional help text as a single row.
+class ComboBoxRow
+{
+private:
+	bool selected = false;
+
+public:
+	bool BeginCombo(const char* name, const char* value, ImGuiComboFlags flags = 0, const char* help = nullptr);
+	void EndCombo();
+
+	bool Selectable(const char* label, bool* selected);
+	bool Selectable(const char* label, bool selected);
+};
+
 template<bool PerGameOption>
 void OptionComboBox(const char *name, config::Option<int, PerGameOption>& option, const char *values[], int count,
 			const char *help = nullptr);
@@ -112,6 +127,20 @@ private:
 
 static inline float uiScaled(float f) {
 	return f * settings.display.uiScale;
+}
+
+static inline float touchFriendlyScaledHeight() {
+	// 48dp is the recommended minimum height for touch controls
+	// https://developer.android.com/guide/topics/ui/accessibility/apps#large-controls
+
+	// 160dpi is the baseline
+	// https://developer.android.com/training/multiscreen/screendensities#dips-pels
+
+	// See also 'gui_updateStyle()'
+	// TODO2: It's not obvious what is the correct factor to use here.
+	const float factor = .75;
+
+	return uiScaled(48.0f * factor);
 }
 
 static inline float uiLargeFontSize()

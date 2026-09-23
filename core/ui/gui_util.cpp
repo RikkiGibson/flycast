@@ -342,70 +342,72 @@ bool OptionRadioButton(const char *name, config::Option<T>& option, T value, con
 template bool OptionRadioButton<bool>(const char *name, config::Option<bool>& option, bool value, const char *help);
 template bool OptionRadioButton<int>(const char *name, config::Option<int>& option, int value, const char *help);
 
-class ComboBox
+bool ComboBoxRow::BeginCombo(const char* name, const char* value, ImGuiComboFlags flags, const char* help)
 {
-private:
-	bool selected = false;
+	// ┌──────────────────┐
+	// │ name       value │
+	// │                  │
+	// │ help             │
+	// │ separator        │
+	// └──────────────────┘
 
-public:
-	bool BeginCombo(const char* name, const char* value, ImGuiComboFlags flags = 0, const char* help = nullptr)
+	ImVec2 initialScreenPos = ImGui::GetCursorScreenPos();
+	float availableWidth = ImGui::GetContentRegionAvail().x;
+	selected = ImGui::IsPopupOpen(name); // TODO2: get rid of internal api
+	ImGui::PushFont(regularFont, uiScaled(21.0f));
+	ImVec2 nameTextSize = ImGui::CalcTextSize(name);
+	// Render 'name'
+	if (ImGui::Selectable(name, &selected, ImGuiSelectableFlags_None, ScaledVec2(0, 48))) {
+		ImGui::OpenPopup(name);
+	}
+	ImGui::PopFont();
+	ImVec2 finalScreenPos = ImGui::GetCursorScreenPos();
+
+	ImGui::SetCursorScreenPos(ImVec2(finalScreenPos.x, finalScreenPos.y - ImGui::GetStyle().FramePadding.y));
+	ImGui::Separator(); // Render 'separator'
+
+	if (help != nullptr)
 	{
-		// ┌──────────────────┐
-		// │ name       value │
-		// │                  │
-		// │ help             │
-		// │ ---------------- │
-		// └──────────────────┘
-
-		// Render 'name' (and containing box) as a Selectable.
-		ImVec2 initialScreenPos = ImGui::GetCursorScreenPos();
-		float availableWidth = ImGui::GetContentRegionAvail().x;
-		selected = ImGui::IsPopupOpen(name); // TODO2: get rid of internal api
-		ImGui::PushFont(regularFont, uiScaled(21.0f));
-		if (ImGui::Selectable(name, &selected, ImGuiSelectableFlags_None, ScaledVec2(0, 40))) {
-			ImGui::OpenPopup(name);
-		}
+		ImVec2 helpPos(initialScreenPos.x, initialScreenPos.y + nameTextSize.y + ImGui::GetStyle().ItemSpacing.y);
+		ImGui::SetCursorScreenPos(helpPos);
+		ImGui::PushFont(settingsTitleFont, 0.0f);
+		ImGui::TextUnformatted(help); // Render 'help'
 		ImGui::PopFont();
-		ImVec2 finalScreenPos = ImGui::GetCursorScreenPos();
-
-		// Render separator, 'help', and 'value' using manual positioning.
-		ImGui::SetCursorScreenPos(ImVec2(finalScreenPos.x, finalScreenPos.y - ImGui::GetStyle().FramePadding.y));
-		ImGui::Separator();
-
-		if (help != nullptr)
-		{
-			ImVec2 nameTextSize = ImGui::CalcTextSize(name);
-			ImVec2 helpPos(initialScreenPos.x, initialScreenPos.y + nameTextSize.y + ImGui::GetStyle().ItemSpacing.y);
-			ImGui::SetCursorScreenPos(helpPos);
-			ImGui::PushFont(settingsTitleFont, 0.0f);
-			ImGui::TextUnformatted(help);
-			ImGui::PopFont();
-		}
-
-		ImVec2 valueTextSize = ImGui::CalcTextSize(value);
-		ImVec2 valuePos(initialScreenPos.x + availableWidth - valueTextSize.x - ImGui::GetStyle().ItemSpacing.x, initialScreenPos.y);
-		ImGui::SetCursorScreenPos(valuePos);
-		ImGui::PushFont(settingsValueFont, uiScaled(24.0f));
-		ImGui::TextUnformatted(value);
-		ImGui::PopFont();
-
-		ImGui::SetCursorScreenPos(finalScreenPos);
-		return ImGui::BeginPopup(name);
 	}
 
-	void EndCombo()
-	{
-		ImGui::EndPopup();
-	}
+	ImGui::PushFont(settingsValueFont, uiLargeFontSize());
+	ImVec2 valueTextSize = ImGui::CalcTextSize(value);
+	ImVec2 valuePos(initialScreenPos.x + availableWidth - valueTextSize.x - ImGui::GetStyle().ItemSpacing.x, initialScreenPos.y);
+	ImGui::SetCursorScreenPos(valuePos);
+	ImGui::TextUnformatted(value); // Render 'value'
+	ImGui::PopFont();
 
-	bool Selectable(const char* label, bool* selected)
-	{
-		ImGui::PushFont(settingsTitleFont, uiScaled(18.0f));
-		bool pressed = ImGui::Selectable(label, selected);
-		ImGui::PopFont();
-		return pressed;
-	}
-};
+	// Finalize CursorScreenPos
+	ImGui::SetCursorScreenPos(finalScreenPos);
+	ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0);
+	ImGui::Dummy(ImVec2(0, 0)); // Avoid 'ImGui::ErrorCheckUsingSetCursorPosToExtendParentBoundaries()' failure
+	ImGui::PopStyleVar();
+
+	return ImGui::BeginPopup(name);
+}
+
+void ComboBoxRow::EndCombo()
+{
+	ImGui::EndPopup();
+}
+
+bool ComboBoxRow::Selectable(const char* label, bool* selected)
+{
+	ImGui::PushFont(settingsTitleFont, uiLargeFontSize());
+	bool pressed = ImGui::Selectable(label, selected);
+	ImGui::PopFont();
+	return pressed;
+}
+
+bool ComboBoxRow::Selectable(const char* label, bool selected)
+{
+	return Selectable(label, &selected);
+}
 
 template<bool PerGameOption>
 void OptionComboBox(const char *name, config::Option<int, PerGameOption>& option, const char *values[], int count,
@@ -416,7 +418,7 @@ void OptionComboBox(const char *name, config::Option<int, PerGameOption>& option
 
 		const char *value = option >= 0 && option < count ? values[option] : "?";
 
-		ComboBox comboBox; // TODO2: need to preserve state?
+		ComboBoxRow comboBox; // TODO2: need to preserve state?
 		if (comboBox.BeginCombo(name, value, ImGuiComboFlags_None, help))
 		{
 			for (int i = 0; i < count; i++)

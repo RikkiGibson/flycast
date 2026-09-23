@@ -55,10 +55,11 @@ void gui_settings_audio()
 	}
 
 	AudioBackend *current_backend = backend;
-	if (ImGui::BeginCombo(T("Audio Driver"), backend_name.c_str(), ImGuiComboFlags_None))
+	static ComboBoxRow audioDriverCombo;
+	if (audioDriverCombo.BeginCombo(T("Audio Driver"), backend_name.c_str(), ImGuiComboFlags_None, T("The audio driver to use")))
 	{
 		bool is_selected = (config::AudioBackend.get() == "auto");
-		if (ImGui::Selectable(T("auto - Automatic driver selection"), &is_selected))
+		if (audioDriverCombo.Selectable(T("auto - Automatic driver selection"), &is_selected))
 			config::AudioBackend.set("auto");
 
 		for (u32 i = 0; i < AudioBackend::getCount(); i++)
@@ -69,15 +70,13 @@ void gui_settings_audio()
 			if (is_selected)
 				current_backend = backend;
 
-			if (ImGui::Selectable((backend->slug + " - " + backend->getName()).c_str(), &is_selected))
+			if (audioDriverCombo.Selectable((backend->slug + " - " + backend->getName()).c_str(), &is_selected))
 				config::AudioBackend.set(backend->slug);
 			if (is_selected)
 				ImGui::SetItemDefaultFocus();
 		}
-		ImGui::EndCombo();
+		audioDriverCombo.EndCombo();
 	}
-	ImGui::SameLine();
-	ShowHelpMarker(T("The audio driver to use"));
 
 	if (current_backend != nullptr)
 	{
@@ -107,19 +106,20 @@ void gui_settings_audio()
 			}
 			else if (options->type == AudioBackend::Option::list)
 			{
-				if (ImGui::BeginCombo(options->caption.c_str(), value.c_str(), ImGuiComboFlags_None))
+				static ComboBoxRow audioBackendCombo;
+				if (audioBackendCombo.BeginCombo(options->caption.c_str(), value.c_str(), ImGuiComboFlags_None))
 				{
 					bool is_selected = false;
 					for (const auto& cur : options->values)
 					{
 						is_selected = value == cur;
-						if (ImGui::Selectable(cur.c_str(), &is_selected))
+						if (audioBackendCombo.Selectable(cur.c_str(), &is_selected))
 							config::saveStr(current_backend->slug, options->name, cur);
 
 						if (is_selected)
 							ImGui::SetItemDefaultFocus();
 					}
-					ImGui::EndCombo();
+					audioBackendCombo.EndCombo();
 				}
 			}
 			else {
