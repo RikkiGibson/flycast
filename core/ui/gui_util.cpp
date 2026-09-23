@@ -375,7 +375,7 @@ bool ComboBoxRow::BeginCombo(const char* name, const char* value, ImGuiComboFlag
 		ImGui::PopFont();
 	}
 
-	ImGui::PushFont(settingsValueFont, uiLargeFontSize());
+	ImGui::PushFont(settingsValueFont, uiScaled(24.0f));
 	ImVec2 valueTextSize = ImGui::CalcTextSize(value);
 	ImVec2 valuePos(initialScreenPos.x + availableWidth - valueTextSize.x - ImGui::GetStyle().ItemSpacing.x, initialScreenPos.y);
 	ImGui::SetCursorScreenPos(valuePos);
