@@ -356,9 +356,8 @@ public:
 		// │ help             │
 		// │ ---------------- │
 		// └──────────────────┘
-		// - Render 'name' (and containing box) as a Selectable.
-		// - Render 'help', 'value' and separator using manual positioning.
 
+		// Render 'name' (and containing box) as a Selectable.
 		ImVec2 initialScreenPos = ImGui::GetCursorScreenPos();
 		float availableWidth = ImGui::GetContentRegionAvail().x;
 		selected = ImGui::IsPopupOpen(name); // TODO2: get rid of internal api
@@ -368,6 +367,8 @@ public:
 		}
 		ImGui::PopFont();
 		ImVec2 finalScreenPos = ImGui::GetCursorScreenPos();
+
+		// Render separator, 'help', and 'value' using manual positioning.
 		ImGui::SetCursorScreenPos(ImVec2(finalScreenPos.x, finalScreenPos.y - ImGui::GetStyle().FramePadding.y));
 		ImGui::Separator();
 
@@ -376,7 +377,6 @@ public:
 			ImVec2 nameTextSize = ImGui::CalcTextSize(name);
 			ImVec2 helpPos(initialScreenPos.x, initialScreenPos.y + nameTextSize.y + ImGui::GetStyle().ItemSpacing.y);
 			ImGui::SetCursorScreenPos(helpPos);
-
 			ImGui::PushFont(settingsTitleFont, 0.0f);
 			ImGui::TextUnformatted(help);
 			ImGui::PopFont();
@@ -385,13 +385,11 @@ public:
 		ImVec2 valueTextSize = ImGui::CalcTextSize(value);
 		ImVec2 valuePos(initialScreenPos.x + availableWidth - valueTextSize.x - ImGui::GetStyle().ItemSpacing.x, initialScreenPos.y);
 		ImGui::SetCursorScreenPos(valuePos);
-
 		ImGui::PushFont(settingsValueFont, uiScaled(24.0f));
 		ImGui::TextUnformatted(value);
 		ImGui::PopFont();
 
 		ImGui::SetCursorScreenPos(finalScreenPos);
-
 		return ImGui::BeginPopup(name);
 	}
 
@@ -402,7 +400,7 @@ public:
 
 	bool Selectable(const char* label, bool* selected)
 	{
-		ImGui::PushFont(settingsTitleFont, 0.0f);
+		ImGui::PushFont(settingsTitleFont, uiScaled(18.0f));
 		bool pressed = ImGui::Selectable(label, selected);
 		ImGui::PopFont();
 		return pressed;

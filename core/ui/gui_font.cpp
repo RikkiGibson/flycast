@@ -251,16 +251,16 @@ static void loadFonts(const std::vector<FontEntry>& entries, const ImFontConfig&
 	}
 }
 
-ImFontConfig beginLoadOneFont(ImGuiIO& io, const char* debugName, const std::string& path, float fontSize)
+ImFontConfig beginLoadOneFont(ImGuiIO& io, const char* debugName, const std::string& path, float fontSize, ImFont*& dstFont)
 {
 	size_t dataSize;
 	std::unique_ptr<u8[]> data = resource::load(path, dataSize);
 	verify(data != nullptr);
 	ImFontConfig fontConfig;
 	std::strcpy(fontConfig.Name, debugName);
-	ImFont *font = io.Fonts->AddFontFromMemoryTTF(data.release(), (int)dataSize, fontSize, &fontConfig, nullptr);
+	dstFont = io.Fonts->AddFontFromMemoryTTF(data.release(), (int)dataSize, fontSize, &fontConfig, nullptr);
 	fontConfig.MergeMode = true;
-	fontConfig.DstFont = font;
+	fontConfig.DstFont = dstFont;
 
 	// Ignore load errors for fonts after the initial font
 	fontConfig.Flags |= ImFontFlags_NoLoadError;
@@ -276,14 +276,10 @@ void gui_loadFonts()
 	ImGuiStyle& style = ImGui::GetStyle();
 	const float fontSize = uiScaled(17.f);
 
-	ImFontConfig fontConfig = beginLoadOneFont(io, "Regular", "fonts/Roboto-Medium.ttf", fontSize);
-	regularFont = fontConfig.DstFont;
-	ImFontConfig boldFontConfig = beginLoadOneFont(io, "Bold", "fonts/Roboto-Bold.ttf", fontSize);
-	boldFont = boldFontConfig.DstFont;
-	ImFontConfig settingsTitleFontConfig = beginLoadOneFont(io, "Settings Title", "fonts/Jura-wght.ttf", fontSize);
-	settingsTitleFont = settingsTitleFontConfig.DstFont;
-	ImFontConfig settingsValueFontConfig = beginLoadOneFont(io, "Settings Value", "fonts/EncodeSans-wdth-wght.ttf", fontSize);
-	settingsValueFont = settingsValueFontConfig.DstFont;
+	ImFontConfig fontConfig = beginLoadOneFont(io, "Regular", "fonts/Roboto-Medium.ttf", fontSize, regularFont);
+	ImFontConfig boldFontConfig = beginLoadOneFont(io, "Bold", "fonts/Roboto-Bold.ttf", fontSize, boldFont);
+	ImFontConfig settingsTitleFontConfig = beginLoadOneFont(io, "Settings Title", "fonts/Jura-wght.ttf", fontSize, settingsTitleFont);
+	ImFontConfig settingsValueFontConfig = beginLoadOneFont(io, "Settings Value", "fonts/EncodeSans-wdth-wght.ttf", fontSize, settingsValueFont);
 
 	std::vector<FontEntry> fonts;
 	std::vector<FontEntry> boldFonts;
