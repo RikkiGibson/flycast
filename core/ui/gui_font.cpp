@@ -25,6 +25,7 @@
 
 ImFont *boldFont;
 ImFont *settingsTitleFont;
+ImFont *settingsValueFont;
 
 namespace FontFace
 {
@@ -249,47 +250,39 @@ static void loadFonts(const std::vector<FontEntry>& entries, const ImFontConfig&
 	}
 }
 
+ImFontConfig beginLoadOneFont(ImGuiIO& io, const char* debugName, const std::string& path, float fontSize)
+{
+	size_t dataSize;
+	std::unique_ptr<u8[]> data = resource::load(path, dataSize);
+	verify(data != nullptr);
+	ImFontConfig fontConfig;
+	std::strcpy(fontConfig.Name, debugName);
+	ImFont *font = io.Fonts->AddFontFromMemoryTTF(data.release(), (int)dataSize, fontSize, &fontConfig, nullptr);
+	fontConfig.MergeMode = true;
+	fontConfig.DstFont = font;
+
+	// Ignore load errors for fonts after the initial font
+	fontConfig.Flags |= ImFontFlags_NoLoadError;
+	return fontConfig;
+}
+
 void gui_loadFonts()
 {
 	ImGuiIO& io = ImGui::GetIO();
 	io.Fonts->Clear();
 	io.Fonts->SetFontLoader(ImGuiFreeType::GetFontLoader());
-	
-	// Regular font
+
 	ImGuiStyle& style = ImGui::GetStyle();
 	const float fontSize = uiScaled(17.f);
-	
-	size_t dataSize;
-	std::unique_ptr<u8[]> data = resource::load("fonts/Roboto-Medium.ttf", dataSize);
-	verify(data != nullptr);
-	ImFontConfig fontConfig;
-	std::strcpy(fontConfig.Name, "Regular");
-	ImFont *regularFont = io.Fonts->AddFontFromMemoryTTF(data.release(), (int)dataSize, fontSize, &fontConfig, nullptr);
-	fontConfig.MergeMode = true;
-	fontConfig.DstFont = regularFont;
-	
-	// Bold font
-	data = resource::load("fonts/Roboto-Bold.ttf", dataSize);
-	verify(data != nullptr);
-	ImFontConfig boldFontConfig;
-	std::strcpy(boldFontConfig.Name, "Bold");
-	boldFont = io.Fonts->AddFontFromMemoryTTF(data.release(), (int)dataSize, fontSize, &boldFontConfig, nullptr);
-	boldFontConfig.MergeMode = true;
-	boldFontConfig.DstFont = boldFont;
-	
-	data = resource::load("fonts/Jura-wght.ttf", dataSize);
-	verify(data != nullptr);
-	ImFontConfig settingsTitleFontConfig;
-	std::strcpy(settingsTitleFontConfig.Name, "Settings Title");
-	settingsTitleFont = io.Fonts->AddFontFromMemoryTTF(data.release(), (int)dataSize, fontSize, &settingsTitleFontConfig, nullptr);
-	settingsTitleFontConfig.MergeMode = true;
-	settingsTitleFontConfig.DstFont = settingsTitleFont;
-	
+
+	ImFontConfig fontConfig = beginLoadOneFont(io, "Regular", "fonts/Roboto-Medium.ttf", fontSize);
+	ImFontConfig boldFontConfig = beginLoadOneFont(io, "Bold", "fonts/Roboto-Bold.ttf", fontSize);
+	boldFont = boldFontConfig.DstFont;
+	ImFontConfig settingsTitleFontConfig = beginLoadOneFont(io, "Settings Title", "fonts/Jura-wght.ttf", fontSize);
+	settingsTitleFont = settingsTitleFontConfig.DstFont;
+
 	std::vector<FontEntry> fonts;
 	std::vector<FontEntry> boldFonts;
-	fontConfig.Flags |= ImFontFlags_NoLoadError;
-	boldFontConfig.Flags |= ImFontFlags_NoLoadError;
-	settingsTitleFontConfig.Flags |= ImFontFlags_NoLoadError;
 	
 	ImFontConfig emojiConfig = fontConfig;
 	emojiConfig.FontLoaderFlags |= ImGuiFreeTypeLoaderFlags_LoadColor | ImGuiFreeTypeBuilderFlags_Bitmap;
@@ -482,7 +475,8 @@ void gui_loadFonts()
 	loadFonts(fonts, settingsTitleFontConfig);
 	
 	// Font Awesome symbols
-	data = resource::load("fonts/" FONT_ICON_FILE_NAME_FAS, dataSize);
+	size_t dataSize;
+	auto data = resource::load("fonts/" FONT_ICON_FILE_NAME_FAS, dataSize);
 	verify(data != nullptr);
 	
 	ImFontConfig faFontConfig = fontConfig;
@@ -490,6 +484,8 @@ void gui_loadFonts()
 	io.Fonts->AddFontFromMemoryTTF(data.get(), (int)dataSize, fontSize, &faFontConfig);
 	boldFontConfig.FontDataOwnedByAtlas = false;
 	io.Fonts->AddFontFromMemoryTTF(data.get(), (int)dataSize, fontSize, &boldFontConfig);
+
+	// Only the last call can take ownership (avoid deleting data multiple times)
 	settingsTitleFontConfig.FontDataOwnedByAtlas = true;
 	io.Fonts->AddFontFromMemoryTTF(data.release(), (int)dataSize, fontSize, &settingsTitleFontConfig);
 

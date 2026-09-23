@@ -16,6 +16,7 @@
     You should have received a copy of the GNU General Public License
     along with reicast.  If not, see <https://www.gnu.org/licenses/>.
  */
+#include "gui_font.h"
 #include "gui_util.h"
 #include "types.h"
 #include "stdclass.h"
@@ -341,6 +342,57 @@ bool OptionRadioButton(const char *name, config::Option<T>& option, T value, con
 template bool OptionRadioButton<bool>(const char *name, config::Option<bool>& option, bool value, const char *help);
 template bool OptionRadioButton<int>(const char *name, config::Option<int>& option, int value, const char *help);
 
+class ComboBox
+{
+private:
+	bool selected = false;
+
+public:
+	bool BeginCombo(const char* name, const char* value, ImGuiComboFlags flags = 0, const char* help = nullptr)
+	{
+		// ┌──────────────────┐
+		// │ name       value │
+		// │                  │
+		// │ help             │
+		// │ ---------------- │
+		// └──────────────────┘
+		ImVec2 initialScreenPos = ImGui::GetCursorScreenPos();
+		float availableWidth = ImGui::GetContentRegionAvail().x;
+		selected = ImGui::IsPopupOpen(name); // TODO2: internal api
+		if (ImGui::Selectable(name, &selected, ImGuiSelectableFlags_None, ScaledVec2(0, 40))) {
+			ImGui::OpenPopup(name);
+		}
+		ImVec2 finalScreenPos = ImGui::GetCursorScreenPos();
+		ImGui::SetCursorScreenPos(ImVec2(finalScreenPos.x, finalScreenPos.y - ImGui::GetStyle().FramePadding.y));
+		ImGui::Separator();
+
+		if (help != nullptr)
+		{
+			ImVec2 nameTextSize = ImGui::CalcTextSize(name);
+			ImVec2 helpPos(initialScreenPos.x, initialScreenPos.y + nameTextSize.y + ImGui::GetStyle().ItemSpacing.y);
+			ImGui::SetCursorScreenPos(helpPos);
+
+			ImGui::PushFont(settingsTitleFont);
+			ImGui::TextUnformatted(help);
+			ImGui::PopFont();
+		}
+
+		ImVec2 valueTextSize = ImGui::CalcTextSize(value);
+		ImVec2 valuePos(initialScreenPos.x + availableWidth - valueTextSize.x, initialScreenPos.y);
+		ImGui::SetCursorScreenPos(valuePos);
+		ImGui::TextUnformatted(value);
+
+		ImGui::SetCursorScreenPos(finalScreenPos);
+
+		return ImGui::BeginPopup(name);
+	}
+
+	void EndCombo()
+	{
+		ImGui::EndPopup();
+	}
+};
+
 template<bool PerGameOption>
 void OptionComboBox(const char *name, config::Option<int, PerGameOption>& option, const char *values[], int count,
 			const char *help)
@@ -350,30 +402,8 @@ void OptionComboBox(const char *name, config::Option<int, PerGameOption>& option
 
 		const char *value = option >= 0 && option < count ? values[option] : "?";
 
-		ImGui::PushID("Test");
-		if (ImGui::Selectable(name, false, ImGuiSelectableFlags_None, ScaledVec2(0, 40)))
-		{
-			ImGui::OpenPopup(name);
-		}
-
-		ImGui::SetNextWindowPos(ImVec2(ImGui::GetContentRegionAvail().x - uiScaled(150), ImGui::GetCursorPosY()));
-		if (ImGui::BeginPopup(name))
-		{
-			for (int i = 0; i < count; i++)
-			{
-				bool is_selected = option == i;
-				if (ImGui::Selectable(values[i], &is_selected)) {
-					option = i;
-					ImGui::CloseCurrentPopup();
-				}
-				if (is_selected)
-					ImGui::SetItemDefaultFocus();
-			}
-			ImGui::EndPopup();
-		}
-		ImGui::PopID();
-
-		if (ImGui::BeginCombo(name, value, ImGuiComboFlags_None))
+		ComboBox comboBox; // TODO2: need to preserve state?
+		if (comboBox.BeginCombo(name, value, ImGuiComboFlags_None, help))
 		{
 			for (int i = 0; i < count; i++)
 			{
@@ -383,13 +413,8 @@ void OptionComboBox(const char *name, config::Option<int, PerGameOption>& option
 				if (is_selected)
 					ImGui::SetItemDefaultFocus();
 			}
-			ImGui::EndCombo();
+			comboBox.EndCombo();
 		}
-	}
-	if (help != nullptr)
-	{
-		ImGui::SameLine();
-		ShowHelpMarker(help);
 	}
 }
 

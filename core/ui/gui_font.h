@@ -17,5 +17,8 @@
  along with Flycast.  If not, see <https://www.gnu.org/licenses/>.
  */
 #pragma once
+#include "imgui.h"
 
 void gui_loadFonts();
+extern ImFont* settingsTitleFont;
+// extern ImFont* settingsValueFont;

@@ -18,6 +18,7 @@
  */
 #include "settings.h"
 #include "gui.h"
+#include "gui_font.h"
 #include "IconsFontAwesome6.h"
 #include "mainui.h"
 #include "log/LogManager.h"
@@ -28,8 +29,6 @@
 #ifdef GDB_SERVER
 #include "hw/mem/addrspace.h"
 #endif
-
-extern ImFont *settingsTitleFont;
 
 static void gui_settings_advanced()
 {
