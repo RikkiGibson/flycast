@@ -326,7 +326,9 @@ void gui_display_settings_header(ImVec2 normal_padding, std::array<bool, 4>& map
 		}
 	}
 
-	ImGui::Spacing();
+	ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, uiScaled(14.f));
+	ImGui::Separator();
+	ImGui::PopStyleVar();
 	ImGui::PopFont();
 }
 
