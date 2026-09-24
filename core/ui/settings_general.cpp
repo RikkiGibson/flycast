@@ -208,14 +208,13 @@ void gui_settings_general()
 		}
 	}
 
-	static ComboBoxRow uiLanguageCombo;
-	if (uiLanguageCombo.BeginCombo(T("UI Language"), preview.c_str()))
+	if (ComboBoxRow::BeginCombo(T("UI Language"), preview.c_str()))
 	{
 		for (const auto& lang : UILanguages)
 		{
 			const bool selected = (currentLanguage == lang.value);
 
-			if (uiLanguageCombo.Selectable(lang.label, selected)) {
+			if (ComboBoxRow::Selectable(lang.label, selected)) {
 				config::UILanguage = lang.value;
 				i18n::reloadLanguage();
 			}
@@ -223,7 +222,7 @@ void gui_settings_general()
 				ImGui::SetItemDefaultFocus();
 		}
 
-		uiLanguageCombo.EndCombo();
+		ComboBoxRow::EndCombo();
 	}
 
 	{
@@ -251,18 +250,17 @@ void gui_settings_general()
 		const char *value = config::Cable == 0 ? cable[0]
 				: config::Cable > 0 && config::Cable <= (int)std::size(cable) ? cable[config::Cable - 1]
 				: "?";
-		static ComboBoxRow cableCombo;
-		if (cableCombo.BeginCombo(T("Cable"), value, ImGuiComboFlags_None, T("Video connection type")))
+		if (ComboBoxRow::BeginCombo(T("Cable"), value, ImGuiComboFlags_None, T("Video connection type")))
 		{
 			for (int i = 0; i < IM_ARRAYSIZE(cable); i++)
 			{
 				bool is_selected = i == 0 ? config::Cable <= 1 : config::Cable - 1 == i;
-				if (cableCombo.Selectable(cable[i], &is_selected))
+				if (ComboBoxRow::Selectable(cable[i], &is_selected))
 					config::Cable = i == 0 ? 0 : i + 1;
 				if (is_selected)
 					ImGui::SetItemDefaultFocus();
 			}
-			cableCombo.EndCombo();
+			ComboBoxRow::EndCombo();
 		}
 	}
 

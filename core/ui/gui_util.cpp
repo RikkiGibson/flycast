@@ -353,11 +353,11 @@ bool ComboBoxRow::BeginCombo(const char* name, const char* value, ImGuiComboFlag
 
 	ImVec2 initialScreenPos = ImGui::GetCursorScreenPos();
 	float availableWidth = ImGui::GetContentRegionAvail().x;
-	selected = ImGui::IsPopupOpen(name); // TODO2: get rid of internal api
+	bool selected = ImGui::IsPopupOpen(name);
 	ImGui::PushFont(regularFont, uiScaled(21.0f));
 	ImVec2 nameTextSize = ImGui::CalcTextSize(name);
 	// Render 'name'
-	if (ImGui::Selectable(name, &selected, ImGuiSelectableFlags_None, ScaledVec2(0, 48))) {
+	if (ImGui::Selectable(name, selected, ImGuiSelectableFlags_None, ScaledVec2(0, 48))) {
 		ImGui::OpenPopup(name);
 	}
 	ImGui::PopFont();
@@ -417,19 +417,17 @@ void OptionComboBox(const char *name, config::Option<int, PerGameOption>& option
 		DisabledScope scope(option.isReadOnly());
 
 		const char *value = option >= 0 && option < count ? values[option] : "?";
-
-		ComboBoxRow comboBox; // TODO2: need to preserve state?
-		if (comboBox.BeginCombo(name, value, ImGuiComboFlags_None, help))
+		if (ComboBoxRow::BeginCombo(name, value, ImGuiComboFlags_None, help))
 		{
 			for (int i = 0; i < count; i++)
 			{
 				bool is_selected = option == i;
-				if (comboBox.Selectable(values[i], &is_selected))
+				if (ComboBoxRow::Selectable(values[i], &is_selected))
 					option = i;
 				if (is_selected)
 					ImGui::SetItemDefaultFocus();
 			}
-			comboBox.EndCombo();
+			ComboBoxRow::EndCombo();
 		}
 	}
 }

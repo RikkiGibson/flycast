@@ -932,6 +932,8 @@ add_subdirectory(core/deps/libelf)
 target_link_libraries(${PROJECT_NAME} PRIVATE elf)
 if(NOT LIBRETRO)
 	target_compile_definitions(${PROJECT_NAME} PRIVATE
+		IMGUI_DISABLE_DEMO_WINDOWS
+		IMGUI_DISABLE_DEBUG_TOOLS
 		IMGUI_DEFINE_MATH_OPERATORS)
 	target_include_directories(${PROJECT_NAME} PRIVATE core/deps/imgui core/deps/imgui/backends)
 	target_sources(${PROJECT_NAME} PRIVATE

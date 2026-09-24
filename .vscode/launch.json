@@ -95,8 +95,7 @@
             "program": "${workspaceFolder}/build/Debug/Hollycast.app/Contents/MacOS/Hollycast",
             "args": ["--config", "log:Verbosity=3", "--config", "log:LogToFile=yes"],
             "cwd": "${workspaceFolder}/build",
-            // TODO2 REVERT
-            // "preLaunchTask": "Build Debug",
+            "preLaunchTask": "Build Debug",
             "initCommands": [
                 "command source ${workspaceFolder}/shell/apple/emulator-osx/LLDBInitFile"
             ]
