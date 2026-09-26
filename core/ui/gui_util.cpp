@@ -245,51 +245,19 @@ bool renderSelectable(const char* name, const char* help, std::function<void(ImR
 
 bool CheckboxRow(const char* name, bool* value, const char* help = nullptr)
 {
-	// ┌──────────────────┐
-	// │ name             │
-	// │              ┌─┐ │
-	// │ help         └─┘ │
-	// │ separator        │
-	// └──────────────────┘
-
-	ImVec2 initialScreenPos = ImGui::GetCursorScreenPos();
-	float availableWidth = ImGui::GetContentRegionAvail().x;
-	ImGui::PushFont(regularFont, uiScaled(21.0f));
-	ImVec2 nameTextSize = ImGui::CalcTextSize(name);
-	bool pressed = ImGui::Selectable(name, false, ImGuiSelectableFlags_None, ScaledVec2(0, 48)); // Render 'name'
+	std::function<void(ImRect)> renderValue = [value](ImRect rect) {
+		float checkboxSpacingSize = ImGui::GetFrameHeightWithSpacing();
+		ImVec2 checkboxPos = ImVec2(
+			rect.Max.x - checkboxSpacingSize,
+			rect.Min.y + (rect.GetHeight() - checkboxSpacingSize) / 2
+		);
+		ImGui::SetCursorScreenPos(checkboxPos);
+		ImGui::PushItemFlag(ImGuiItemFlags_NoNav, true);
+		ImGui::Checkbox("##value", value); // Render 'value'
+		ImGui::PopItemFlag();
+	};
+	bool pressed = renderSelectable(name, help, renderValue);
 	*value ^= pressed;
-
-	ImGui::PopFont();
-	ImVec2 finalScreenPos = ImGui::GetCursorScreenPos();
-
-	ImGui::SetCursorScreenPos(ImVec2(finalScreenPos.x, finalScreenPos.y - ImGui::GetStyle().FramePadding.y));
-	ImGui::Separator(); // Render 'separator'
-
-	if (help != nullptr)
-	{
-		ImVec2 helpPos(initialScreenPos.x, initialScreenPos.y + nameTextSize.y + ImGui::GetStyle().ItemSpacing.y);
-		ImGui::SetCursorScreenPos(helpPos);
-		ImGui::PushFont(settingsTitleFont, 0.0f);
-		ImGui::TextUnformatted(help); // Render 'help'
-		ImGui::PopFont();
-	}
-
-	float checkboxSpacingSize = ImGui::GetFrameHeightWithSpacing();
-	ImVec2 checkboxPos = ImVec2(
-		initialScreenPos.x + availableWidth - checkboxSpacingSize,
-		(initialScreenPos.y + finalScreenPos.y) / 2 - checkboxSpacingSize / 2
-	);
-	ImGui::SetCursorScreenPos(checkboxPos);
-	ImGui::PushItemFlag(ImGuiItemFlags_NoNav, true);
-	ImGui::Checkbox((std::string("##") + name).c_str(), value); // Render value
-	ImGui::PopItemFlag();
-
-	// Finalize CursorScreenPos
-	ImGui::SetCursorScreenPos(finalScreenPos);
-	ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0);
-	ImGui::Dummy(ImVec2(0, 0)); // Avoid 'ImGui::ErrorCheckUsingSetCursorPosToExtendParentBoundaries()' failure
-	ImGui::PopStyleVar();
-
 	return pressed;
 }
 
@@ -429,25 +397,32 @@ bool renderSelectable(const char* name, const char* help, std::function<void(ImR
 
 	if (help != nullptr)
 	{
+		ImGui::PushFont(settingsTitleFont, 0.0f);
 		const float valueReservedWidth = ImGui::GetFrameHeight();
 		ImVec2 helpTextSize = ImGui::CalcTextSize(help);
 		bool useTooltip = helpTextSize.x > selectableWidth - valueReservedWidth;
 		if (useTooltip)
 		{
-			ImGui::PushFont(settingsTitleFont, uiScaled(21.0f));
 			// Use extra padding on the tooltip to make it easy to hit
 			ImVec2 tooltipPos = ImVec2(initialScreenPos.x + selectableWidth + ImGui::GetStyle().ItemSpacing.x, initialScreenPos.y);
 			ImGui::SetCursorScreenPos(tooltipPos);
 			ImGui::InvisibleButton("##tooltip", ImVec2(selectableHeight, selectableHeight));
-			ImGui::SetItemTooltip(help);
+			if (ImGui::BeginItemTooltip())
+			{
+				ImGui::PushTextWrapPos(selectableWidth);
+				ImGui::TextWrapped(help);
+				ImGui::PopTextWrapPos();
+				ImGui::EndTooltip();
+			}
 
+			ImGui::PushFont(nullptr, uiScaled(21.0f));
 			ImVec2 tooltipTextSize = ImGui::CalcTextSize(ICON_FA_CIRCLE_INFO);
 			ImGui::SetCursorScreenPos(ImVec2(tooltipPos.x + (selectableHeight - tooltipTextSize.x) / 2, tooltipPos.y + (selectableHeight - tooltipTextSize.y) / 2));
 			ImGui::TextDisabled(ICON_FA_CIRCLE_INFO); // Render 'tooltip'
+			ImGui::PopFont();
 		}
 		else
 		{
-			ImGui::PushFont(settingsTitleFont, 0.0f);
 			ImVec2 helpPos(initialScreenPos.x, initialScreenPos.y + nameTextSize.y + ImGui::GetStyle().ItemSpacing.y);
 			ImGui::SetCursorScreenPos(helpPos);
 			ImGui::TextUnformatted(help); // Render 'help'
