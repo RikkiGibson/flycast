@@ -49,6 +49,18 @@ template<bool PerGameOption>
 bool OptionSlider(const char *name, config::Option<int, PerGameOption>& option, int min, int max, const char *help = nullptr, const char *format = nullptr);
 template<typename T>
 bool OptionRadioButton(const char *name, config::Option<T>& option, T value, const char *help = nullptr);
+
+// Renders a combo box with optional help text as a single row.
+class ComboBoxRow
+{
+public:
+	static bool BeginCombo(const char* name, const char* value, ImGuiComboFlags flags = 0, const char* help = nullptr);
+	static void EndCombo();
+
+	static bool Selectable(const char* label, bool* selected);
+	static bool Selectable(const char* label, bool selected);
+};
+
 template<bool PerGameOption>
 void OptionComboBox(const char *name, config::Option<int, PerGameOption>& option, const char *values[], int count,
 			const char *help = nullptr);

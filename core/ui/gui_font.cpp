@@ -23,7 +23,10 @@
 #include "IconsFontAwesome6.h"
 #include "imgui/misc/freetype/imgui_freetype.h"
 
+ImFont *regularFont;
 ImFont *boldFont;
+ImFont *settingsTitleFont;
+ImFont *settingsValueFont;
 
 namespace FontFace
 {
@@ -204,6 +207,7 @@ static void loadFonts(const std::vector<FontEntry>& entries, const ImFontConfig&
 			entryCfg.GlyphOffset.y = e.size * e.offsetY;
 			static ImWchar faRanges[] = { ICON_MIN_FA, ICON_MAX_FA, 0 };
 			entryCfg.GlyphExcludeRanges = faRanges;
+			entryCfg.FontDataOwnedByAtlas = true;
 			
 			ImFont* font = ImGui::GetIO().Fonts->AddFontFromFileTTF(path.c_str(), e.size, &entryCfg, nullptr);
 			if (font)
@@ -248,36 +252,43 @@ static void loadFonts(const std::vector<FontEntry>& entries, const ImFontConfig&
 	}
 }
 
+static std::vector<std::unique_ptr<u8[]>> rawFontData{};
+
+ImFontConfig beginLoadOneFont(ImGuiIO& io, const char* debugName, const std::string& path, float fontSize, ImFont*& dstFont)
+{
+	size_t dataSize;
+	std::unique_ptr<u8[]> data = resource::load(path, dataSize);
+	verify(data != nullptr);
+	ImFontConfig fontConfig;
+	fontConfig.FontDataOwnedByAtlas = false;
+	std::strcpy(fontConfig.Name, debugName);
+	dstFont = io.Fonts->AddFontFromMemoryTTF(data.get(), (int)dataSize, fontSize, &fontConfig, nullptr);
+	rawFontData.push_back(std::move(data));
+	fontConfig.MergeMode = true;
+	fontConfig.DstFont = dstFont;
+
+	// Ignore load errors for fonts after the initial font
+	fontConfig.Flags |= ImFontFlags_NoLoadError;
+	return fontConfig;
+}
+
 void gui_loadFonts()
 {
 	ImGuiIO& io = ImGui::GetIO();
 	io.Fonts->Clear();
+	rawFontData.clear();
 	io.Fonts->SetFontLoader(ImGuiFreeType::GetFontLoader());
-	
-	// Regular font
+
 	ImGuiStyle& style = ImGui::GetStyle();
 	const float fontSize = uiScaled(17.f);
-	
-	size_t dataSize;
-	std::unique_ptr<u8[]> data = resource::load("fonts/Roboto-Medium.ttf", dataSize);
-	verify(data != nullptr);
-	ImFont *regularFont = io.Fonts->AddFontFromMemoryTTF(data.release(), (int)dataSize, fontSize, nullptr, nullptr);
-	ImFontConfig fontConfig;
-	fontConfig.MergeMode = true;
-	fontConfig.DstFont = regularFont;
-	
-	// Bold font
-	data = resource::load("fonts/Roboto-Bold.ttf", dataSize);
-	verify(data != nullptr);
-	boldFont = io.Fonts->AddFontFromMemoryTTF(data.release(), (int)dataSize, fontSize, nullptr, nullptr);
-	ImFontConfig boldFontConfig;
-	boldFontConfig.MergeMode = true;
-	boldFontConfig.DstFont = boldFont;
-	
+
+	ImFontConfig fontConfig = beginLoadOneFont(io, "Regular", "fonts/Roboto-Medium.ttf", fontSize, regularFont);
+	ImFontConfig boldFontConfig = beginLoadOneFont(io, "Bold", "fonts/Roboto-Bold.ttf", fontSize, boldFont);
+	ImFontConfig settingsTitleFontConfig = beginLoadOneFont(io, "Settings Title", "fonts/Jura-wght.ttf", fontSize, settingsTitleFont);
+	ImFontConfig settingsValueFontConfig = beginLoadOneFont(io, "Settings Value", "fonts/EncodeSans-wdth-wght.ttf", fontSize, settingsValueFont);
+
 	std::vector<FontEntry> fonts;
 	std::vector<FontEntry> boldFonts;
-	fontConfig.Flags |= ImFontFlags_NoLoadError;
-	boldFontConfig.Flags |= ImFontFlags_NoLoadError;
 	
 	ImFontConfig emojiConfig = fontConfig;
 	emojiConfig.FontLoaderFlags |= ImGuiFreeTypeLoaderFlags_LoadColor | ImGuiFreeTypeBuilderFlags_Bitmap;
@@ -464,19 +475,22 @@ void gui_loadFonts()
 	
 	// TODO BSD, iOS, ...
 #endif
-	
+
 	loadFonts(fonts, fontConfig);
 	loadFonts(boldFonts, boldFontConfig);
+	loadFonts(fonts, settingsTitleFontConfig);
+	loadFonts(boldFonts, settingsValueFontConfig);
 	
 	// Font Awesome symbols
-	data = resource::load("fonts/" FONT_ICON_FILE_NAME_FAS, dataSize);
+	size_t dataSize;
+	std::unique_ptr<u8[]> data = resource::load("fonts/" FONT_ICON_FILE_NAME_FAS, dataSize);
 	verify(data != nullptr);
-	
-	ImFontConfig faFontConfig = fontConfig;
-	faFontConfig.FontDataOwnedByAtlas = false;
-	io.Fonts->AddFontFromMemoryTTF(data.get(), (int)dataSize, fontSize, &faFontConfig);
-	boldFontConfig.FontDataOwnedByAtlas = true;
-	io.Fonts->AddFontFromMemoryTTF(data.release(), (int)dataSize, fontSize, &boldFontConfig);
+	verify(!fontConfig.FontDataOwnedByAtlas);
+	io.Fonts->AddFontFromMemoryTTF(data.get(), (int)dataSize, fontSize, &fontConfig);
+	io.Fonts->AddFontFromMemoryTTF(data.get(), (int)dataSize, fontSize, &boldFontConfig);
+	io.Fonts->AddFontFromMemoryTTF(data.get(), (int)dataSize, fontSize, &settingsTitleFontConfig);
+	io.Fonts->AddFontFromMemoryTTF(data.get(), (int)dataSize, fontSize, &settingsValueFontConfig);
+	rawFontData.push_back(std::move(data));
 
 	// AddFont() may sync the active ImGui font stack using the previous size.
 	// Re-apply the rebuilt atlas size after all fonts have been registered.

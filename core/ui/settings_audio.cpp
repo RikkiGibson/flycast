@@ -55,10 +55,10 @@ void gui_settings_audio()
 	}
 
 	AudioBackend *current_backend = backend;
-	if (ImGui::BeginCombo(T("Audio Driver"), backend_name.c_str(), ImGuiComboFlags_None))
+	if (ComboBoxRow::BeginCombo(T("Audio Driver"), backend_name.c_str(), ImGuiComboFlags_None, T("The audio driver to use")))
 	{
 		bool is_selected = (config::AudioBackend.get() == "auto");
-		if (ImGui::Selectable(T("auto - Automatic driver selection"), &is_selected))
+		if (ComboBoxRow::Selectable(T("auto - Automatic driver selection"), &is_selected))
 			config::AudioBackend.set("auto");
 
 		for (u32 i = 0; i < AudioBackend::getCount(); i++)
@@ -69,15 +69,13 @@ void gui_settings_audio()
 			if (is_selected)
 				current_backend = backend;
 
-			if (ImGui::Selectable((backend->slug + " - " + backend->getName()).c_str(), &is_selected))
+			if (ComboBoxRow::Selectable((backend->slug + " - " + backend->getName()).c_str(), &is_selected))
 				config::AudioBackend.set(backend->slug);
 			if (is_selected)
 				ImGui::SetItemDefaultFocus();
 		}
-		ImGui::EndCombo();
+		ComboBoxRow::EndCombo();
 	}
-	ImGui::SameLine();
-	ShowHelpMarker(T("The audio driver to use"));
 
 	if (current_backend != nullptr)
 	{
@@ -107,19 +105,19 @@ void gui_settings_audio()
 			}
 			else if (options->type == AudioBackend::Option::list)
 			{
-				if (ImGui::BeginCombo(options->caption.c_str(), value.c_str(), ImGuiComboFlags_None))
+				if (ComboBoxRow::BeginCombo(options->caption.c_str(), value.c_str(), ImGuiComboFlags_None))
 				{
 					bool is_selected = false;
 					for (const auto& cur : options->values)
 					{
 						is_selected = value == cur;
-						if (ImGui::Selectable(cur.c_str(), &is_selected))
+						if (ComboBoxRow::Selectable(cur.c_str(), &is_selected))
 							config::saveStr(current_backend->slug, options->name, cur);
 
 						if (is_selected)
 							ImGui::SetItemDefaultFocus();
 					}
-					ImGui::EndCombo();
+					ComboBoxRow::EndCombo();
 				}
 			}
 			else {

@@ -18,6 +18,7 @@
  */
 #include "settings.h"
 #include "gui.h"
+#include "gui_font.h"
 #include "IconsFontAwesome6.h"
 #include "mainui.h"
 #include "log/LogManager.h"
@@ -156,19 +157,19 @@ static void gui_debug_tab()
 		ImGui::Spacing();
 
 		static const char *levels[] = { "Notice", "Error", "Warning", "Info", "Debug" };
-		if (ImGui::BeginCombo("Log Verbosity", levels[logManager->GetLogLevel() - 1], ImGuiComboFlags_None))
+		if (ComboBoxRow::BeginCombo("Log Verbosity", levels[logManager->GetLogLevel() - 1], ImGuiComboFlags_None))
 		{
 			for (std::size_t i = 0; i < std::size(levels); i++)
 			{
 				bool is_selected = logManager->GetLogLevel() - 1 == (int)i;
-				if (ImGui::Selectable(levels[i], &is_selected)) {
+				if (ComboBoxRow::Selectable(levels[i], &is_selected)) {
 					logManager->SetLogLevel((LogTypes::LOG_LEVELS)(i + 1));
 					config::saveInt("log", "Verbosity", i + 1);
 				}
 				if (is_selected)
 					ImGui::SetItemDefaultFocus();
 			}
-			ImGui::EndCombo();
+			ComboBoxRow::EndCombo();
 		}
 		InputText("Log Server", &config::LogServer.get(), ImGuiInputTextFlags_CharsNoBlank | ImGuiInputTextFlags_CallbackCharFilter, dnsCharFilter);
         ImGui::SameLine();
@@ -215,7 +216,7 @@ public:
 		ImGui::BeginChild("##verticalTabBar", ScaledVec2(155, 0), ImGuiChildFlags_NavFlattened | ImGuiChildFlags_Borders);
 		ImGui::EndChild();
 		ImGui::SameLine();
-		ImGui::BeginChild("##activeTabContent", ImVec2(0, 0), ImGuiChildFlags_NavFlattened | ImGuiChildFlags_Borders);
+		ImGui::BeginChild("##activeTabContent", ImVec2(0, 0), ImGuiChildFlags_NavFlattened | ImGuiChildFlags_Borders, ImGuiWindowFlags_DragScrolling);
 		ImGui::EndChild();
 
 		return ImGui::BeginChild("##verticalTabBar");
@@ -240,7 +241,9 @@ public:
 
 		bool isActiveTab = activeLabel == label;
 		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ScaledVec2(6, 12));
+		ImGui::PushFont(settingsTitleFont, 0.0f);
 		bool pressed = ImGui::Selectable(fullLabel.c_str(), isActiveTab);
+		ImGui::PopFont();
 		ImGui::PopStyleVar();
 		if (pressed) {
 			// Delay changing the active selectable until the next frame.
@@ -258,6 +261,8 @@ public:
 
 	void EndTab()
 	{
+		scrollWhenDraggingOnVoid();
+		windowDragScroll();
 		ImGui::EndChild(); // ##activeTabContent
 		ImGui::BeginChild("##verticalTabBar");
 	}
@@ -266,6 +271,7 @@ public:
 void gui_display_settings_header(ImVec2 normal_padding, std::array<bool, 4>& mapleDevicesChanges, std::array<std::array<bool, 2>, 4>& expDevicesChanges)
 {
 	ImguiStyleVar _(ImGuiStyleVar_FramePadding, normal_padding);
+	ImGui::PushFont(settingsTitleFont, 0.0f);
 
 	auto availableWidth = ImGui::GetContentRegionAvail().x;
     if (ImGui::Button(T("Done"), ImVec2(availableWidth, uiScaled(30))))
@@ -322,7 +328,10 @@ void gui_display_settings_header(ImVec2 normal_padding, std::array<bool, 4>& map
 		}
 	}
 
-	ImGui::Spacing();
+	ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, uiScaled(14.f));
+	ImGui::Separator();
+	ImGui::PopStyleVar();
+	ImGui::PopFont();
 }
 
 void gui_display_settings()
