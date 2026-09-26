@@ -39,6 +39,7 @@
 #include <future>
 #include <string>
 #include <vector>
+#include "IconsFontAwesome6.h"
 
 using namespace i18n;
 
@@ -400,29 +401,64 @@ bool renderSelectable(const char* name, const char* help, std::function<void(ImR
 	// │ separator        │          │
 	// └──────────────────┘──────────┘
 	ImVec2 initialScreenPos = ImGui::GetCursorScreenPos();
-	float selectableWidth = ImMin(ImGui::GetContentRegionAvail().x, uiScaled(400.0f));
+
+	// Decide whether help is long enough to require a tooltip
+	// If so, reserve some space on the right for it
+	const float selectableMaxWidth = uiScaled(400.0f);
+	const float valueReservedWidth = uiScaled(80.0f);
+	ImVec2 helpTextSize(0, 0);
+	if (help != nullptr)
+	{
+		ImGui::PushFont(settingsTitleFont, 0.0f);
+		helpTextSize = ImGui::CalcTextSize(help);
+		ImGui::PopFont();
+	}
+
+	bool useTooltip = helpTextSize.x > selectableMaxWidth - valueReservedWidth;
+	float selectableHeight = uiScaled(48.0f);
+	float selectableWidth =
+		ImMax(0.0f,
+			ImMin(ImGui::GetContentRegionAvail().x, selectableMaxWidth)
+				// Tooltip is square and same height as the selectable
+				- (useTooltip ? selectableHeight + ImGui::GetStyle().ItemSpacing.x : 0.0f));
+
 	bool selected = ImGui::IsPopupOpen(name);
 	ImGui::PushFont(regularFont, uiScaled(21.0f));
 	ImVec2 nameTextSize = ImGui::CalcTextSize(name);
 	// Render 'name'
-	bool pressed = ImGui::Selectable(name, selected, ImGuiSelectableFlags_None, ImVec2(selectableWidth, uiScaled(48.0f)));
+	bool pressed = ImGui::Selectable(name, selected, ImGuiSelectableFlags_None, ImVec2(selectableWidth, selectableHeight));
 
 	ImGui::PopFont();
 	ImVec2 finalScreenPos = ImGui::GetCursorScreenPos();
 
-	ImGui::SetCursorScreenPos(ImVec2(finalScreenPos.x, finalScreenPos.y - ImGui::GetStyle().FramePadding.y));
+	ImGui::SetCursorScreenPos(ImVec2(finalScreenPos.x, ImGui::GetItemRectMax().y));
 	ImGui::Separator(); // Render 'separator'
 
 	if (help != nullptr)
 	{
-		ImVec2 helpPos(initialScreenPos.x, initialScreenPos.y + nameTextSize.y + ImGui::GetStyle().ItemSpacing.y);
-		ImGui::SetCursorScreenPos(helpPos);
 		ImGui::PushFont(settingsTitleFont, 0.0f);
-		ImGui::TextUnformatted(help); // Render 'help'
+		if (useTooltip)
+		{
+			// Use extra padding on the tooltip to make it easy to hit
+			ImVec2 tooltipPos = ImVec2(initialScreenPos.x + selectableWidth + ImGui::GetStyle().ItemSpacing.x, initialScreenPos.y);
+			ImGui::SetCursorScreenPos(tooltipPos);
+			ImGui::InvisibleButton("##tooltip", ImVec2(selectableHeight, selectableHeight));
+			ImGui::SetItemTooltip(help);
+
+			ImVec2 tooltipTextSize = ImGui::CalcTextSize(ICON_FA_CIRCLE_INFO);
+			ImGui::SetCursorScreenPos(ImVec2(tooltipPos.x + (selectableHeight - tooltipTextSize.x) / 2, tooltipPos.y + (selectableHeight - tooltipTextSize.y / 2)));
+			ImGui::TextDisabled(ICON_FA_CIRCLE_INFO); // Render tooltip icon
+		}
+		else
+		{
+			ImVec2 helpPos(initialScreenPos.x, initialScreenPos.y + nameTextSize.y + ImGui::GetStyle().ItemSpacing.y);
+			ImGui::SetCursorScreenPos(helpPos);
+			ImGui::TextUnformatted(help); // Render 'help'
+		}
 		ImGui::PopFont();
 	}
 
-	renderValue(ImRect(initialScreenPos, finalScreenPos));
+	renderValue(ImRect(initialScreenPos, ImVec2(finalScreenPos.x + selectableWidth, finalScreenPos.y)));
 
 	// Finalize CursorScreenPos
 	ImGui::SetCursorScreenPos(finalScreenPos);
@@ -440,7 +476,7 @@ bool ComboBoxRow::BeginCombo(const char* name, const char* value, ImGuiComboFlag
 	std::function<void(ImRect)> renderValue = [value](ImRect rect) {
 		ImGui::PushFont(settingsValueFont, uiScaled(24.0f));
 		ImVec2 valueTextSize = ImGui::CalcTextSize(value);
-		ImVec2 valuePos(rect.Max.x - valueTextSize.x - ImGui::GetStyle().ItemSpacing.x, rect.Min.y);
+		ImVec2 valuePos(rect.Max.x - valueTextSize.x, rect.Min.y);
 		ImGui::SetCursorScreenPos(valuePos);
 		ImGui::TextUnformatted(value); // Render 'value'
 		ImGui::PopFont();
