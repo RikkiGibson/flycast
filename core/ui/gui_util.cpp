@@ -394,33 +394,26 @@ template bool OptionRadioButton<int>(const char *name, config::Option<int>& opti
 /// @param renderValue function which renders the value right-justified in the given rect
 bool renderSelectable(const char* name, const char* help, std::function<void(ImRect)> renderValue)
 {
-	// ┌──────────────────┐──────────┐
-	// │ name       value │          │
-	// │                  │    i     │
-	// │ help             │          │
-	// │ separator        │          │
-	// └──────────────────┘──────────┘
+	ImguiID id(name);
+
+	// |----row---------------------|
+	// |----selectable----|
+	// ┌──────────────────┐─────────┐
+	// │ name       value │         │
+	// │                  │ tooltip │
+	// │ help             │         │
+	// │ separator        │         │
+	// └──────────────────┘─────────┘
+	// One of 'help' or 'tooltip' will be used. Space will always be reserved for both.
 	ImVec2 initialScreenPos = ImGui::GetCursorScreenPos();
 
-	// Decide whether help is long enough to require a tooltip
-	// If so, reserve some space on the right for it
-	const float selectableMaxWidth = uiScaled(400.0f);
-	const float valueReservedWidth = uiScaled(80.0f);
-	ImVec2 helpTextSize(0, 0);
-	if (help != nullptr)
-	{
-		ImGui::PushFont(settingsTitleFont, 0.0f);
-		helpTextSize = ImGui::CalcTextSize(help);
-		ImGui::PopFont();
-	}
-
-	bool useTooltip = helpTextSize.x > selectableMaxWidth - valueReservedWidth;
-	float selectableHeight = uiScaled(48.0f);
-	float selectableWidth =
+	const float rowMaxWidth = uiScaled(400.0f);
+	const float selectableHeight = uiScaled(48.0f);
+	const float selectableWidth =
 		ImMax(0.0f,
-			ImMin(ImGui::GetContentRegionAvail().x, selectableMaxWidth)
+			ImMin(ImGui::GetContentRegionAvail().x, rowMaxWidth)
 				// Tooltip is square and same height as the selectable
-				- (useTooltip ? selectableHeight + ImGui::GetStyle().ItemSpacing.x : 0.0f));
+				- (selectableHeight + ImGui::GetStyle().ItemSpacing.x));
 
 	bool selected = ImGui::IsPopupOpen(name);
 	ImGui::PushFont(regularFont, uiScaled(21.0f));
@@ -436,9 +429,12 @@ bool renderSelectable(const char* name, const char* help, std::function<void(ImR
 
 	if (help != nullptr)
 	{
-		ImGui::PushFont(settingsTitleFont, 0.0f);
+		const float valueReservedWidth = ImGui::GetFrameHeight();
+		ImVec2 helpTextSize = ImGui::CalcTextSize(help);
+		bool useTooltip = helpTextSize.x > selectableWidth - valueReservedWidth;
 		if (useTooltip)
 		{
+			ImGui::PushFont(settingsTitleFont, uiScaled(21.0f));
 			// Use extra padding on the tooltip to make it easy to hit
 			ImVec2 tooltipPos = ImVec2(initialScreenPos.x + selectableWidth + ImGui::GetStyle().ItemSpacing.x, initialScreenPos.y);
 			ImGui::SetCursorScreenPos(tooltipPos);
@@ -446,11 +442,12 @@ bool renderSelectable(const char* name, const char* help, std::function<void(ImR
 			ImGui::SetItemTooltip(help);
 
 			ImVec2 tooltipTextSize = ImGui::CalcTextSize(ICON_FA_CIRCLE_INFO);
-			ImGui::SetCursorScreenPos(ImVec2(tooltipPos.x + (selectableHeight - tooltipTextSize.x) / 2, tooltipPos.y + (selectableHeight - tooltipTextSize.y / 2)));
-			ImGui::TextDisabled(ICON_FA_CIRCLE_INFO); // Render tooltip icon
+			ImGui::SetCursorScreenPos(ImVec2(tooltipPos.x + (selectableHeight - tooltipTextSize.x) / 2, tooltipPos.y + (selectableHeight - tooltipTextSize.y) / 2));
+			ImGui::TextDisabled(ICON_FA_CIRCLE_INFO); // Render 'tooltip'
 		}
 		else
 		{
+			ImGui::PushFont(settingsTitleFont, 0.0f);
 			ImVec2 helpPos(initialScreenPos.x, initialScreenPos.y + nameTextSize.y + ImGui::GetStyle().ItemSpacing.y);
 			ImGui::SetCursorScreenPos(helpPos);
 			ImGui::TextUnformatted(help); // Render 'help'
