@@ -409,11 +409,8 @@ bool ComboBoxRow::BeginCombo(const char* name, const char* value, ImGuiComboFlag
 	ImGui::PopFont();
 	ImVec2 finalScreenPos = ImGui::GetCursorScreenPos();
 
-	ImVec2 separatorPos(finalScreenPos.x, finalScreenPos.y - ImGui::GetStyle().FramePadding.y);
-	ImGui::GetWindowDrawList()->AddLine( // Render 'separator'
-		separatorPos,
-		ImVec2(separatorPos.x + selectableWidth, separatorPos.y),
-		ImGui::GetColorU32(ImGuiCol_Separator));
+	ImGui::SetCursorScreenPos(ImVec2(finalScreenPos.x, finalScreenPos.y - ImGui::GetStyle().FramePadding.y));
+	ImGui::Separator(); // Render 'separator'
 
 	if (help != nullptr)
 	{
