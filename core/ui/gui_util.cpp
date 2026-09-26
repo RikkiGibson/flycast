@@ -240,6 +240,8 @@ void ShowHelpMarker(const char* desc)
     }
 }
 
+bool renderSelectable(const char* name, const char* help, std::function<void(ImRect)> renderValue);
+
 bool CheckboxRow(const char* name, bool* value, const char* help = nullptr)
 {
 	// ┌──────────────────┐
@@ -387,24 +389,23 @@ bool OptionRadioButton(const char *name, config::Option<T>& option, T value, con
 template bool OptionRadioButton<bool>(const char *name, config::Option<bool>& option, bool value, const char *help);
 template bool OptionRadioButton<int>(const char *name, config::Option<int>& option, int value, const char *help);
 
-bool ComboBoxRow::BeginCombo(const char* name, const char* value, ImGuiComboFlags flags, const char* help)
+/// Render contents of an option row
+/// @param renderValue function which renders the value right-justified in the given rect
+bool renderSelectable(const char* name, const char* help, std::function<void(ImRect)> renderValue)
 {
-	// ┌──────────────────┐
-	// │ name       value │
-	// │                  │
-	// │ help             │
-	// │ separator        │
-	// └──────────────────┘
-
+	// ┌──────────────────┐──────────┐
+	// │ name       value │          │
+	// │                  │    i     │
+	// │ help             │          │
+	// │ separator        │          │
+	// └──────────────────┘──────────┘
 	ImVec2 initialScreenPos = ImGui::GetCursorScreenPos();
 	float selectableWidth = ImMin(ImGui::GetContentRegionAvail().x, uiScaled(400.0f));
 	bool selected = ImGui::IsPopupOpen(name);
 	ImGui::PushFont(regularFont, uiScaled(21.0f));
 	ImVec2 nameTextSize = ImGui::CalcTextSize(name);
 	// Render 'name'
-	if (ImGui::Selectable(name, selected, ImGuiSelectableFlags_None, ImVec2(selectableWidth, uiScaled(48.0f)))) {
-		ImGui::OpenPopup(name);
-	}
+	bool pressed = ImGui::Selectable(name, selected, ImGuiSelectableFlags_None, ImVec2(selectableWidth, uiScaled(48.0f)));
 
 	ImGui::PopFont();
 	ImVec2 finalScreenPos = ImGui::GetCursorScreenPos();
@@ -421,18 +422,34 @@ bool ComboBoxRow::BeginCombo(const char* name, const char* value, ImGuiComboFlag
 		ImGui::PopFont();
 	}
 
-	ImGui::PushFont(settingsValueFont, uiScaled(24.0f));
-	ImVec2 valueTextSize = ImGui::CalcTextSize(value);
-	ImVec2 valuePos(initialScreenPos.x + selectableWidth - valueTextSize.x - ImGui::GetStyle().ItemSpacing.x, initialScreenPos.y);
-	ImGui::SetCursorScreenPos(valuePos);
-	ImGui::TextUnformatted(value); // Render 'value'
-	ImGui::PopFont();
+	renderValue(ImRect(initialScreenPos, finalScreenPos));
 
 	// Finalize CursorScreenPos
 	ImGui::SetCursorScreenPos(finalScreenPos);
 	ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0);
 	ImGui::Dummy(ImVec2(0, 0)); // Avoid 'ImGui::ErrorCheckUsingSetCursorPosToExtendParentBoundaries()' failure
 	ImGui::PopStyleVar();
+
+	return pressed;
+}
+
+bool ComboBoxRow::BeginCombo(const char* name, const char* value, ImGuiComboFlags flags, const char* help)
+{
+	verify(flags == ImGuiComboFlags_None);
+
+	std::function<void(ImRect)> renderValue = [value](ImRect rect) {
+		ImGui::PushFont(settingsValueFont, uiScaled(24.0f));
+		ImVec2 valueTextSize = ImGui::CalcTextSize(value);
+		ImVec2 valuePos(rect.Max.x - valueTextSize.x - ImGui::GetStyle().ItemSpacing.x, rect.Min.y);
+		ImGui::SetCursorScreenPos(valuePos);
+		ImGui::TextUnformatted(value); // Render 'value'
+		ImGui::PopFont();
+	};
+
+	bool pressed = renderSelectable(name, help, renderValue);
+	if (pressed) {
+		ImGui::OpenPopup(name);
+	}
 
 	return ImGui::BeginPopup(name);
 }
