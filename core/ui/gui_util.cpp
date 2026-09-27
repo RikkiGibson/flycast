@@ -376,7 +376,7 @@ bool renderSelectable(const char* name, const char* help, std::function<void(ImR
 	ImVec2 initialScreenPos = ImGui::GetCursorScreenPos();
 
 	const float rowMaxWidth = uiScaled(400.0f);
-	const float selectableHeight = uiScaled(48.0f);
+	const float selectableHeight = uiScaled(40.0f); // equivalent to 48dp on Android
 	const float selectableWidth =
 		ImMax(0.0f,
 			ImMin(ImGui::GetContentRegionAvail().x, rowMaxWidth)
