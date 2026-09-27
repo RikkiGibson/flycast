@@ -569,11 +569,13 @@ static void displayMappedControl(const std::shared_ptr<GamepadDevice>& gamepad, 
 
 		if (combo.inputs.size() > 1)
 		{
-			const char* help = T("When checked, this combo will only activate when all keys are pressed in the given sequence.\n"
-						"When not checked, the combo will activate when all keys are pressed in any order.");
-			if (CheckboxRow("Sequential", &(combo.sequential), help))
+			if (ImGui::Checkbox(T("Sequential"), &(combo.sequential)))
 				// Update mapping with updated combo settings
 				input_mapping->set_button(gamepad_port, key, combo);
+			ImGui::SameLine();
+			ShowHelpMarker(
+					T("When checked, this combo will only activate when all keys are pressed in the given sequence.\n"
+						"When not checked, the combo will activate when all keys are pressed in any order."));
 		}
 	}
 }
