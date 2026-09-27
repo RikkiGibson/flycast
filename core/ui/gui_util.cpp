@@ -243,7 +243,7 @@ void ShowHelpMarker(const char* desc)
 
 bool renderSelectable(const char* name, const char* help, std::function<void(ImRect)> renderValue);
 
-bool CheckboxRow(const char* name, bool* value, const char* help = nullptr)
+bool CheckboxRow(const char* name, bool* value, const char* help)
 {
 	std::function<void(ImRect)> renderValue = [value](ImRect rect) {
 		float checkboxSpacingSize = ImGui::GetFrameHeightWithSpacing();
@@ -367,12 +367,12 @@ bool renderSelectable(const char* name, const char* help, std::function<void(ImR
 	// |----row---------------------|
 	// |----selectable----|
 	// ┌──────────────────┐─────────┐
-	// │ name       value │         │
-	// │                  │ tooltip │
+	// │ name             │         │
+	// │            value │ tooltip │
 	// │ help             │         │
 	// │ separator        │         │
 	// └──────────────────┘─────────┘
-	// One of 'help' or 'tooltip' will be used. Space will always be reserved for both.
+	// One of 'help' or 'tooltip' will be used. Space will always be reserved for 'tooltip'.
 	ImVec2 initialScreenPos = ImGui::GetCursorScreenPos();
 
 	const float rowMaxWidth = uiScaled(400.0f);

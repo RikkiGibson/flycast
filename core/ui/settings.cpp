@@ -118,7 +118,7 @@ static void gui_settings_advanced()
 		}
 		ImGui::Unindent();
         bool logToFile = config::loadBool("log", "LogToFile", false);
-		if (ImGui::Checkbox(T("Log to File"), &logToFile))
+		if (CheckboxRow(T("Log to File"), &logToFile))
 			config::saveBool("log", "LogToFile", logToFile);
         ImGui::SameLine();
         ShowHelpMarker(T("Log debug information to flycast.log"));
@@ -149,7 +149,7 @@ static void gui_debug_tab()
 		{
 			bool enabled = logManager->IsEnabled(type, logManager->GetLogLevel());
 			std::string name = std::string(logManager->GetShortName(type)) + " - " + logManager->GetFullName(type);
-			if (ImGui::Checkbox(name.c_str(), &enabled) && logManager->GetLogLevel() > LogTypes::LWARNING) {
+			if (CheckboxRow(name.c_str(), &enabled) && logManager->GetLogLevel() > LogTypes::LWARNING) {
 				logManager->SetEnable(type, enabled);
 				config::saveBool("log", logManager->GetShortName(type), enabled);
 			}

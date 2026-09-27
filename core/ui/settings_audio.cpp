@@ -99,7 +99,7 @@ void gui_settings_audio()
 			else if (options->type == AudioBackend::Option::checkbox)
 			{
 				bool check = value == "1";
-				if (ImGui::Checkbox(options->caption.c_str(), &check))
+				if (CheckboxRow(options->caption.c_str(), &check))
 					config::saveStr(current_backend->slug, options->name,
 							check ? "1" : "0");
 			}
