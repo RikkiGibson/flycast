@@ -1365,7 +1365,7 @@ void gui_settings_controls(std::array<bool, 4>& mapleDevicesChanges, std::array<
 							| ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoLabel);
 					ImGui::SameLine();
 					bool enabled = color != 0;
-					if (CheckboxRow(T("Crosshair"), &enabled) || colorChanged)
+					if (ImGui::Checkbox(T("Crosshair"), &enabled) || colorChanged)
 					{
 						if (enabled)
 						{
