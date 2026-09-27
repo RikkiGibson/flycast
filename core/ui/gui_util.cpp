@@ -425,7 +425,7 @@ bool renderSelectable(const char* name, const char* help, std::function<void(ImR
 			if (ImGui::BeginItemTooltip())
 			{
 				ImGui::PushTextWrapPos(selectableWidth);
-				ImGui::TextWrapped(help);
+				ImGui::TextWrapped("%s", help);
 				ImGui::PopTextWrapPos();
 				ImGui::EndTooltip();
 			}
