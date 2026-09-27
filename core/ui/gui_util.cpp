@@ -388,7 +388,7 @@ bool renderSelectable(const char* name, const char* help, std::function<void(ImR
 	if (help != nullptr)
 	{
 		ImGui::PushFont(settingsTitleFont, 0.0f);
-		const float valueReservedWidth = ImGui::GetFrameHeight();
+		const float valueReservedWidth = ImGui::GetFrameHeightWithSpacing();
 		ImVec2 helpTextSize = ImGui::CalcTextSize(help);
 		ImGui::PopFont();
 		useHelpText = helpTextSize.x <= selectableWidth - valueReservedWidth;
