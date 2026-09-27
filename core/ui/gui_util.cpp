@@ -241,7 +241,7 @@ void ShowHelpMarker(const char* desc)
     }
 }
 
-bool renderSelectable(const char* name, const char* help, std::function<void(ImRect)> renderValue);
+bool renderSelectable(const char* name, const char* help, bool selected, std::function<void(ImRect)> renderValue);
 
 bool CheckboxRow(const char* name, bool* value, const char* help)
 {
@@ -256,7 +256,7 @@ bool CheckboxRow(const char* name, bool* value, const char* help)
 		ImGui::Checkbox("##value", value); // Render 'value'
 		ImGui::PopItemFlag();
 	};
-	bool pressed = renderSelectable(name, help, renderValue);
+	bool pressed = renderSelectable(name, help, false, renderValue);
 	*value ^= pressed;
 	return pressed;
 }
@@ -360,7 +360,7 @@ template bool OptionRadioButton<int>(const char *name, config::Option<int>& opti
 
 /// Render contents of an option row
 /// @param renderValue function which renders the value right-justified in the given rect
-bool renderSelectable(const char* name, const char* help, std::function<void(ImRect)> renderValue)
+bool renderSelectable(const char* name, const char* help, bool selected, std::function<void(ImRect)> renderValue)
 {
 	ImguiID id(name);
 
@@ -383,7 +383,6 @@ bool renderSelectable(const char* name, const char* help, std::function<void(ImR
 				// Tooltip is square and same height as the selectable
 				- (selectableHeight + ImGui::GetStyle().ItemSpacing.x));
 
-	bool selected = ImGui::IsPopupOpen(name);
 	ImGui::PushFont(regularFont, uiScaled(21.0f));
 	ImVec2 nameTextSize = ImGui::CalcTextSize(name);
 	ImGui::PushStyleVarY(ImGuiStyleVar_SelectableTextAlign, 0.5f);
@@ -445,7 +444,8 @@ bool ComboBoxRow::BeginCombo(const char* name, const char* value, ImGuiComboFlag
 		ImGui::PopFont();
 	};
 
-	bool pressed = renderSelectable(name, help, renderValue);
+	bool selected = ImGui::IsPopupOpen(name);
+	bool pressed = renderSelectable(name, help, selected, renderValue);
 	if (pressed) {
 		ImGui::OpenPopup(name);
 	}
