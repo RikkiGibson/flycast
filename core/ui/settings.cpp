@@ -118,7 +118,7 @@ static void gui_settings_advanced()
 		}
 		ImGui::Unindent();
         bool logToFile = config::loadBool("log", "LogToFile", false);
-		if (ImGui::Checkbox(T("Log to File"), &logToFile))
+		if (CheckboxRow(T("Log to File"), &logToFile))
 			config::saveBool("log", "LogToFile", logToFile);
         ImGui::SameLine();
         ShowHelpMarker(T("Log debug information to flycast.log"));

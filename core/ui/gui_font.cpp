@@ -284,8 +284,8 @@ void gui_loadFonts()
 
 	ImFontConfig fontConfig = beginLoadOneFont(io, "Regular", "fonts/Roboto-Medium.ttf", fontSize, regularFont);
 	ImFontConfig boldFontConfig = beginLoadOneFont(io, "Bold", "fonts/Roboto-Bold.ttf", fontSize, boldFont);
-	ImFontConfig settingsTitleFontConfig = beginLoadOneFont(io, "Settings Title", "fonts/Jura-wght.ttf", fontSize, settingsTitleFont);
-	ImFontConfig settingsValueFontConfig = beginLoadOneFont(io, "Settings Value", "fonts/EncodeSans-wdth-wght.ttf", fontSize, settingsValueFont);
+	ImFontConfig settingsTitleFontConfig = beginLoadOneFont(io, "Settings Title", "fonts/Jura-Regular.ttf", fontSize, settingsTitleFont);
+	ImFontConfig settingsValueFontConfig = beginLoadOneFont(io, "Settings Value", "fonts/EncodeSans-Light.ttf", fontSize, settingsValueFont);
 
 	std::vector<FontEntry> fonts;
 	std::vector<FontEntry> boldFonts;

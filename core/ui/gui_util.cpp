@@ -39,6 +39,7 @@
 #include <future>
 #include <string>
 #include <vector>
+#include "IconsFontAwesome6.h"
 
 using namespace i18n;
 
@@ -240,6 +241,26 @@ void ShowHelpMarker(const char* desc)
     }
 }
 
+bool renderSelectable(const char* name, const char* help, bool selected, std::function<void(ImRect)> renderValue);
+
+bool CheckboxRow(const char* name, bool* value, const char* help)
+{
+	std::function<void(ImRect)> renderValue = [value](ImRect rect) {
+		float checkboxSpacingSize = ImGui::GetFrameHeightWithSpacing();
+		ImVec2 checkboxPos = ImVec2(
+			rect.Max.x - checkboxSpacingSize,
+			rect.Min.y + (rect.GetHeight() - checkboxSpacingSize) / 2
+		);
+		ImGui::SetCursorScreenPos(checkboxPos);
+		ImGui::PushItemFlag(ImGuiItemFlags_NoNav, true);
+		ImGui::Checkbox("##value", value); // Render 'value'
+		ImGui::PopItemFlag();
+	};
+	bool pressed = renderSelectable(name, help, false, renderValue);
+	*value ^= pressed;
+	return pressed;
+}
+
 template<bool PerGameOption>
 bool OptionCheckbox(const char *name, config::Option<bool, PerGameOption>& option, const char *help)
 {
@@ -248,14 +269,9 @@ bool OptionCheckbox(const char *name, config::Option<bool, PerGameOption>& optio
 		DisabledScope scope(option.isReadOnly());
 
 		bool b = option;
-		pressed = ImGui::Checkbox(name, &b);
+		pressed = CheckboxRow(name, &b, help);
 		if (pressed)
 			option.set(b);
-	}
-	if (help != nullptr)
-	{
-		ImGui::SameLine();
-		ShowHelpMarker(help);
 	}
 	return pressed;
 }
@@ -342,55 +358,97 @@ bool OptionRadioButton(const char *name, config::Option<T>& option, T value, con
 template bool OptionRadioButton<bool>(const char *name, config::Option<bool>& option, bool value, const char *help);
 template bool OptionRadioButton<int>(const char *name, config::Option<int>& option, int value, const char *help);
 
-bool ComboBoxRow::BeginCombo(const char* name, const char* value, ImGuiComboFlags flags, const char* help)
+/// Render contents of an option row
+/// @param renderValue function which renders the value right-justified in the given rect
+bool renderSelectable(const char* name, const char* help, bool selected, std::function<void(ImRect)> renderValue)
 {
-	// ┌──────────────────┐
-	// │ name       value │
-	// │                  │
-	// │ help             │
-	// │ separator        │
-	// └──────────────────┘
+	ImguiID id(name);
 
+	// |----row---------------------|
+	// |----selectable----|
+	// ┌──────────────────┐─────────┐
+	// │                  │         │
+	// │ name       value │ tooltip │
+	// │                  │         │
+	// │ separator        │         │
+	// └──────────────────┘─────────┘
+	// Space is reserved for 'tooltip' even if it is not used
 	ImVec2 initialScreenPos = ImGui::GetCursorScreenPos();
-	float selectableWidth = ImMin(ImGui::GetContentRegionAvail().x, uiScaled(400.0f));
-	bool selected = ImGui::IsPopupOpen(name);
+
+	const float rowMaxWidth = uiScaled(400.0f);
+	const float selectableHeight = uiScaled(40.0f); // equivalent to 48dp on Android
+	const float selectableWidth =
+		ImMax(0.0f,
+			ImMin(ImGui::GetContentRegionAvail().x, rowMaxWidth)
+				// Tooltip is square and same height as the selectable
+				- (selectableHeight + ImGui::GetStyle().ItemSpacing.x));
+
 	ImGui::PushFont(regularFont, uiScaled(21.0f));
 	ImVec2 nameTextSize = ImGui::CalcTextSize(name);
+	ImGui::PushStyleVarY(ImGuiStyleVar_SelectableTextAlign, 0.5f);
 	// Render 'name'
-	if (ImGui::Selectable(name, selected, ImGuiSelectableFlags_None, ImVec2(selectableWidth, uiScaled(48.0f)))) {
-		ImGui::OpenPopup(name);
-	}
-
+	bool pressed = ImGui::Selectable(name, selected, ImGuiSelectableFlags_None, ImVec2(selectableWidth, selectableHeight));
+	ImGui::PopStyleVar();
 	ImGui::PopFont();
-	ImVec2 finalScreenPos = ImGui::GetCursorScreenPos();
 
-	ImVec2 separatorPos(finalScreenPos.x, finalScreenPos.y - ImGui::GetStyle().FramePadding.y);
-	ImGui::GetWindowDrawList()->AddLine( // Render 'separator'
-		separatorPos,
-		ImVec2(separatorPos.x + selectableWidth, separatorPos.y),
-		ImGui::GetColorU32(ImGuiCol_Separator));
+	ImVec2 finalScreenPos = ImGui::GetCursorScreenPos();
+	ImGui::SetCursorScreenPos(ImVec2(finalScreenPos.x, ImGui::GetItemRectMax().y));
+	ImGui::Separator(); // Render 'separator'
 
 	if (help != nullptr)
 	{
-		ImVec2 helpPos(initialScreenPos.x, initialScreenPos.y + nameTextSize.y + ImGui::GetStyle().ItemSpacing.y);
-		ImGui::SetCursorScreenPos(helpPos);
-		ImGui::PushFont(settingsTitleFont, 0.0f);
-		ImGui::TextUnformatted(help); // Render 'help'
+		// Use extra padding on the tooltip to make it easy to hit
+		ImVec2 tooltipPos = ImVec2(initialScreenPos.x + selectableWidth + ImGui::GetStyle().ItemSpacing.x, initialScreenPos.y);
+		ImGui::SetCursorScreenPos(tooltipPos);
+		ImGui::InvisibleButton("##tooltip", ImVec2(selectableHeight, selectableHeight));
+		if (ImGui::BeginItemTooltip())
+		{
+			ImGui::PushFont(settingsTitleFont, 0.0f);
+			ImGui::PushTextWrapPos(selectableWidth);
+			ImGui::TextWrapped("%s", help); // Render 'help'
+			ImGui::PopTextWrapPos();
+			ImGui::PopFont();
+			ImGui::EndTooltip();
+		}
+
+		ImGui::PushFont(nullptr, uiScaled(21.0f));
+		ImVec2 tooltipTextSize = ImGui::CalcTextSize(ICON_FA_CIRCLE_INFO);
+		ImGui::SetCursorScreenPos(ImVec2(tooltipPos.x + (selectableHeight - tooltipTextSize.x) / 2, tooltipPos.y + (selectableHeight - tooltipTextSize.y) / 2));
+		ImGui::TextDisabled(ICON_FA_CIRCLE_INFO); // Render 'tooltip'
 		ImGui::PopFont();
 	}
 
-	ImGui::PushFont(settingsValueFont, uiScaled(24.0f));
-	ImVec2 valueTextSize = ImGui::CalcTextSize(value);
-	ImVec2 valuePos(initialScreenPos.x + selectableWidth - valueTextSize.x - ImGui::GetStyle().ItemSpacing.x, initialScreenPos.y);
-	ImGui::SetCursorScreenPos(valuePos);
-	ImGui::TextUnformatted(value); // Render 'value'
-	ImGui::PopFont();
+	renderValue(ImRect(initialScreenPos, ImVec2(finalScreenPos.x + selectableWidth, finalScreenPos.y)));
 
 	// Finalize CursorScreenPos
 	ImGui::SetCursorScreenPos(finalScreenPos);
 	ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0);
 	ImGui::Dummy(ImVec2(0, 0)); // Avoid 'ImGui::ErrorCheckUsingSetCursorPosToExtendParentBoundaries()' failure
 	ImGui::PopStyleVar();
+
+	return pressed;
+}
+
+bool ComboBoxRow::BeginCombo(const char* name, const char* value, ImGuiComboFlags flags, const char* help)
+{
+	verify(flags == ImGuiComboFlags_None);
+
+	std::function<void(ImRect)> renderValue = [value](ImRect rect) {
+		ImGui::PushFont(settingsValueFont, uiScaled(24.0f));
+		ImVec2 valueSize = ImGui::CalcTextSize(value);
+		ImVec2 valuePos(
+			rect.Max.x - valueSize.x,
+			rect.Min.y + (rect.GetHeight() - valueSize.y - ImGui::GetStyle().ItemSpacing.x) / 2);
+		ImGui::SetCursorScreenPos(valuePos);
+		ImGui::TextUnformatted(value); // Render 'value'
+		ImGui::PopFont();
+	};
+
+	bool selected = ImGui::IsPopupOpen(name);
+	bool pressed = renderSelectable(name, help, selected, renderValue);
+	if (pressed) {
+		ImGui::OpenPopup(name);
+	}
 
 	return ImGui::BeginPopup(name);
 }
