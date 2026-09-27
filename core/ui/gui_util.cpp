@@ -447,8 +447,10 @@ bool ComboBoxRow::BeginCombo(const char* name, const char* value, ImGuiComboFlag
 
 	std::function<void(ImRect)> renderValue = [value](ImRect rect) {
 		ImGui::PushFont(settingsValueFont, uiScaled(24.0f));
-		ImVec2 valueTextSize = ImGui::CalcTextSize(value);
-		ImVec2 valuePos(rect.Max.x - valueTextSize.x, rect.Min.y);
+		ImVec2 valueSize = ImGui::CalcTextSize(value);
+		ImVec2 valuePos(
+			rect.Max.x - valueSize.x,
+			rect.Min.y + (rect.GetHeight() - valueSize.y - ImGui::GetStyle().ItemSpacing.x) / 2);
 		ImGui::SetCursorScreenPos(valuePos);
 		ImGui::TextUnformatted(value); // Render 'value'
 		ImGui::PopFont();
