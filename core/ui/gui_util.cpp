@@ -383,25 +383,40 @@ bool renderSelectable(const char* name, const char* help, std::function<void(ImR
 				// Tooltip is square and same height as the selectable
 				- (selectableHeight + ImGui::GetStyle().ItemSpacing.x));
 
+	// Decide whether 'help' text or 'tooltip' will be used
+	bool useHelpText = false;
+	if (help != nullptr)
+	{
+		ImGui::PushFont(settingsTitleFont, 0.0f);
+		const float valueReservedWidth = ImGui::GetFrameHeight();
+		ImVec2 helpTextSize = ImGui::CalcTextSize(help);
+		ImGui::PopFont();
+		useHelpText = helpTextSize.x <= selectableWidth - valueReservedWidth;
+	}
+
 	bool selected = ImGui::IsPopupOpen(name);
 	ImGui::PushFont(regularFont, uiScaled(21.0f));
 	ImVec2 nameTextSize = ImGui::CalcTextSize(name);
+	ImGui::PushStyleVarY(ImGuiStyleVar_SelectableTextAlign, useHelpText ? 0.0f : 0.5f);
 	// Render 'name'
 	bool pressed = ImGui::Selectable(name, selected, ImGuiSelectableFlags_None, ImVec2(selectableWidth, selectableHeight));
-
+	ImGui::PopStyleVar();
 	ImGui::PopFont();
-	ImVec2 finalScreenPos = ImGui::GetCursorScreenPos();
 
+	ImVec2 finalScreenPos = ImGui::GetCursorScreenPos();
 	ImGui::SetCursorScreenPos(ImVec2(finalScreenPos.x, ImGui::GetItemRectMax().y));
 	ImGui::Separator(); // Render 'separator'
 
 	if (help != nullptr)
 	{
 		ImGui::PushFont(settingsTitleFont, 0.0f);
-		const float valueReservedWidth = ImGui::GetFrameHeight();
-		ImVec2 helpTextSize = ImGui::CalcTextSize(help);
-		bool useTooltip = helpTextSize.x > selectableWidth - valueReservedWidth;
-		if (useTooltip)
+		if (useHelpText)
+		{
+			ImVec2 helpPos(initialScreenPos.x, initialScreenPos.y + nameTextSize.y + ImGui::GetStyle().ItemSpacing.y);
+			ImGui::SetCursorScreenPos(helpPos);
+			ImGui::TextUnformatted(help); // Render 'help'
+		}
+		else
 		{
 			// Use extra padding on the tooltip to make it easy to hit
 			ImVec2 tooltipPos = ImVec2(initialScreenPos.x + selectableWidth + ImGui::GetStyle().ItemSpacing.x, initialScreenPos.y);
@@ -420,12 +435,6 @@ bool renderSelectable(const char* name, const char* help, std::function<void(ImR
 			ImGui::SetCursorScreenPos(ImVec2(tooltipPos.x + (selectableHeight - tooltipTextSize.x) / 2, tooltipPos.y + (selectableHeight - tooltipTextSize.y) / 2));
 			ImGui::TextDisabled(ICON_FA_CIRCLE_INFO); // Render 'tooltip'
 			ImGui::PopFont();
-		}
-		else
-		{
-			ImVec2 helpPos(initialScreenPos.x, initialScreenPos.y + nameTextSize.y + ImGui::GetStyle().ItemSpacing.y);
-			ImGui::SetCursorScreenPos(helpPos);
-			ImGui::TextUnformatted(help); // Render 'help'
 		}
 		ImGui::PopFont();
 	}
