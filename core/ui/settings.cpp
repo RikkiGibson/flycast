@@ -149,7 +149,7 @@ static void gui_debug_tab()
 		{
 			bool enabled = logManager->IsEnabled(type, logManager->GetLogLevel());
 			std::string name = std::string(logManager->GetShortName(type)) + " - " + logManager->GetFullName(type);
-			if (CheckboxRow(name.c_str(), &enabled) && logManager->GetLogLevel() > LogTypes::LWARNING) {
+			if (ImGui::Checkbox(name.c_str(), &enabled) && logManager->GetLogLevel() > LogTypes::LWARNING) {
 				logManager->SetEnable(type, enabled);
 				config::saveBool("log", logManager->GetShortName(type), enabled);
 			}
