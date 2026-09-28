@@ -334,6 +334,7 @@ bool SliderIntRow(const char* name, int* v, int v_min, int v_max, const char* fo
 	ImGui::Dummy(ImVec2(selectableWidth, rowHeight));
 	ImVec2 finalScreenPos = ImGui::GetCursorScreenPos();
 
+	// TODO2: this is too high now
 	ImGui::SetCursorScreenPos(ImVec2(finalScreenPos.x, ImGui::GetItemRectMax().y));
 	ImGui::Separator(); // Render 'separator'
 

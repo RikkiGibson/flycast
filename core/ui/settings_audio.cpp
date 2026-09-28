@@ -18,6 +18,7 @@
  */
 #include "settings.h"
 #include "gui.h"
+#include "gui_util.h"
 #include "audio/audiostream.h"
 
 void gui_settings_audio()
@@ -39,10 +40,8 @@ void gui_settings_audio()
     		|| (config::AudioBackend.get() != "auto" && config::AudioBackend.get() != "android"))
     {
 		int latency = (int)roundf(config::AudioBufferSize * 1000.f / 44100.f);
-		ImGui::SliderInt(T("Latency"), &latency, 12, 512, "%d ms");
+		SliderIntRow(T("Latency"), &latency, 12, 512, "%d ms", T("Sets the maximum audio latency. Not supported by all audio drivers."));
 		config::AudioBufferSize = (int)roundf(latency * 44100.f / 1000.f);
-		ImGui::SameLine();
-		ShowHelpMarker(T("Sets the maximum audio latency. Not supported by all audio drivers."));
     }
 
 	AudioBackend *backend = nullptr;
@@ -90,7 +89,8 @@ void gui_settings_audio()
 			if (options->type == AudioBackend::Option::integer)
 			{
 				int val = stoi(value);
-				if (ImGui::SliderInt(options->caption.c_str(), &val, options->minValue, options->maxValue))
+				// TODO2: needs manual testing
+				if (SliderIntRow(options->caption.c_str(), &val, options->minValue, options->maxValue))
 				{
 					std::string s = std::to_string(val);
 					config::saveStr(current_backend->slug, options->name, s);
@@ -99,6 +99,7 @@ void gui_settings_audio()
 			else if (options->type == AudioBackend::Option::checkbox)
 			{
 				bool check = value == "1";
+				// TODO2: needs manual testing
 				if (CheckboxRow(options->caption.c_str(), &check))
 					config::saveStr(current_backend->slug, options->name,
 							check ? "1" : "0");

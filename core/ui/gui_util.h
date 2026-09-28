@@ -52,6 +52,10 @@ bool CheckboxRow(const char* name, bool* value, const char* help = nullptr);
 
 template<bool PerGameOption>
 bool OptionCheckbox(const char *name, config::Option<bool, PerGameOption>& option, const char *help = nullptr);
+
+// Renders a slider with optional help text as a single row.
+bool SliderIntRow(const char* name, int* v, int v_min, int v_max, const char* format = "%d", const char* help = nullptr);
+
 template<bool PerGameOption>
 bool OptionSlider(const char *name, config::Option<int, PerGameOption>& option, int min, int max, const char *help = nullptr, const char *format = nullptr);
 template<typename T>
