@@ -306,6 +306,85 @@ bool OptionCheckbox(const char *name, config::Option<bool, PerGameOption>& optio
 template bool OptionCheckbox(const char *name, config::Option<bool, true>& option, const char *help);
 template bool OptionCheckbox(const char *name, config::Option<bool, false>& option, const char *help);
 
+bool SliderIntRow(const char* name, int* v, int v_min, int v_max, const char* format, const char* help)
+{
+	ImguiID id(name);
+	ImGui::BeginGroup();
+
+	// |----row---------------------|
+	// |----selectable----|
+	// ┌──────────────────┐─────────┐
+	// │                  │         │
+	// │ name       value │ tooltip │
+	// │                  │         │
+	// │ separator        │         │
+	// └──────────────────┘─────────┘
+	// Space is reserved for 'tooltip' even if it is not used
+	ImVec2 initialScreenPos = ImGui::GetCursorScreenPos();
+
+	const float rowMaxWidth = uiScaled(400.0f);
+	const float rowHeight = uiScaled(40.0f); // equivalent to 48dp on Android
+	const float selectableWidth =
+		ImMax(0.0f,
+			ImMin(ImGui::GetContentRegionAvail().x, rowMaxWidth)
+				// Tooltip is square and same height as the selectable
+				- (rowHeight + ImGui::GetStyle().ItemSpacing.x)
+				- gui_indentDepth);
+
+	ImGui::Dummy(ImVec2(selectableWidth, rowHeight));
+	ImVec2 finalScreenPos = ImGui::GetCursorScreenPos();
+
+	ImGui::SetCursorScreenPos(ImVec2(finalScreenPos.x, ImGui::GetItemRectMax().y));
+	ImGui::Separator(); // Render 'separator'
+
+	ImGui::PushFont(regularFont, uiScaled(21.0f));
+	ImVec2 nameTextSize = ImGui::CalcTextSize(name);
+	// Render 'name'
+	ImGui::SetCursorScreenPos(ImVec2(initialScreenPos.x, initialScreenPos.y + gui_centerIn(rowHeight, nameTextSize.y)));
+	ImGui::TextUnformatted(name);
+	ImGui::PopFont();
+
+	if (help != nullptr)
+	{
+		// Use extra padding on the tooltip to make it easy to hit
+		ImVec2 tooltipPos = ImVec2(initialScreenPos.x + selectableWidth + ImGui::GetStyle().ItemSpacing.x, initialScreenPos.y);
+		ImGui::SetCursorScreenPos(tooltipPos);
+		ImGui::InvisibleButton("##tooltip", ImVec2(rowHeight, rowHeight));
+		if (ImGui::BeginItemTooltip())
+		{
+			ImGui::PushFont(settingsTitleFont, 0.0f);
+			ImGui::PushTextWrapPos(selectableWidth);
+			ImGui::TextWrapped("%s", help); // Render 'help'
+			ImGui::PopTextWrapPos();
+			ImGui::PopFont();
+			ImGui::EndTooltip();
+		}
+
+		ImGui::PushFont(nullptr, uiScaled(21.0f));
+		ImVec2 tooltipTextSize = ImGui::CalcTextSize(ICON_FA_CIRCLE_INFO);
+		ImGui::SetCursorScreenPos(tooltipPos + gui_centerIn(ImVec2(rowHeight, rowHeight), tooltipTextSize));
+		ImGui::TextDisabled(ICON_FA_CIRCLE_INFO); // Render 'tooltip'
+		ImGui::PopFont();
+	}
+
+	float sliderOffset = nameTextSize.x + ImGui::GetStyle().ItemSpacing.x * 2;
+	ImVec2 sliderPos(
+		initialScreenPos.x + sliderOffset,
+		initialScreenPos.y + gui_centerIn(rowHeight, ImGui::GetTextLineHeightWithSpacing()));
+	ImGui::SetCursorScreenPos(sliderPos);
+	ImGui::SetNextItemWidth(selectableWidth - sliderOffset - ImGui::GetStyle().ItemSpacing.x);
+	bool valueChanged = ImGui::SliderInt("", v, v_min, v_max, format, ImGuiSliderFlags_None);
+
+	// Finalize CursorScreenPos
+	ImGui::SetCursorScreenPos(finalScreenPos);
+	ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0);
+	ImGui::Dummy(ImVec2(0, 0)); // Avoid 'ImGui::ErrorCheckUsingSetCursorPosToExtendParentBoundaries()' failure
+	ImGui::EndGroup();
+	ImGui::PopStyleVar();
+
+	return valueChanged;
+}
+
 template<bool PerGameOption>
 bool OptionSlider(const char *name, config::Option<int, PerGameOption>& option, int min, int max, const char *help, const char *format)
 {
@@ -314,14 +393,9 @@ bool OptionSlider(const char *name, config::Option<int, PerGameOption>& option, 
 		DisabledScope scope(option.isReadOnly());
 
 		int v = option;
-		valueChanged = ImGui::SliderInt(name, &v, min, max, format);
+		valueChanged = SliderIntRow(name, &v, min, max, format, help);
 		if (valueChanged)
 			option.set(v);
-	}
-	if (help != nullptr)
-	{
-		ImGui::SameLine();
-		ShowHelpMarker(help);
 	}
 	return valueChanged;
 }
