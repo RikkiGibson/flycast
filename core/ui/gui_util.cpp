@@ -241,6 +241,34 @@ void ShowHelpMarker(const char* desc)
     }
 }
 
+float gui_indentDepth;
+
+void gui_Indent(float depth)
+{
+	float xBefore = ImGui::GetCursorScreenPos().x;
+	ImGui::Indent(depth);
+	float xAfter = ImGui::GetCursorScreenPos().x;
+	gui_indentDepth += xAfter - xBefore;
+}
+
+void gui_Unindent(float depth)
+{
+	float xBefore = ImGui::GetCursorScreenPos().x;
+	ImGui::Unindent(depth);
+	float xAfter = ImGui::GetCursorScreenPos().x;
+	gui_indentDepth += xAfter - xBefore;
+}
+
+float gui_centerIn(float outer, float inner)
+{
+	return (outer - inner) / 2;
+}
+
+ImVec2 gui_centerIn(ImVec2 outer, ImVec2 inner)
+{
+	return (outer - inner) / 2;
+}
+
 bool renderSelectable(const char* name, const char* help, bool selected, std::function<void(ImRect)> renderValue);
 
 bool CheckboxRow(const char* name, bool* value, const char* help)
@@ -363,6 +391,7 @@ template bool OptionRadioButton<int>(const char *name, config::Option<int>& opti
 bool renderSelectable(const char* name, const char* help, bool selected, std::function<void(ImRect)> renderValue)
 {
 	ImguiID id(name);
+	ImGui::BeginGroup();
 
 	// |----row---------------------|
 	// |----selectable----|
@@ -381,7 +410,8 @@ bool renderSelectable(const char* name, const char* help, bool selected, std::fu
 		ImMax(0.0f,
 			ImMin(ImGui::GetContentRegionAvail().x, rowMaxWidth)
 				// Tooltip is square and same height as the selectable
-				- (selectableHeight + ImGui::GetStyle().ItemSpacing.x));
+				- (selectableHeight + ImGui::GetStyle().ItemSpacing.x)
+				- gui_indentDepth);
 
 	ImGui::PushFont(regularFont, uiScaled(21.0f));
 	ImVec2 nameTextSize = ImGui::CalcTextSize(name);
@@ -424,6 +454,7 @@ bool renderSelectable(const char* name, const char* help, bool selected, std::fu
 	ImGui::SetCursorScreenPos(finalScreenPos);
 	ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0);
 	ImGui::Dummy(ImVec2(0, 0)); // Avoid 'ImGui::ErrorCheckUsingSetCursorPosToExtendParentBoundaries()' failure
+	ImGui::EndGroup();
 	ImGui::PopStyleVar();
 
 	return pressed;

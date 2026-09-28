@@ -204,19 +204,19 @@ void gui_settings_video()
 		OptionCheckbox(T("Integer Scaling"), config::IntegerScale, T("Scales the output by the maximum integer multiple allowed by the display resolution."));
 		OptionCheckbox(T("Linear Interpolation"), config::LinearInterpolation, T("Scales the output with linear interpolation. Will use nearest neighbor interpolation otherwise. Disable with integer scaling."));
 #ifndef TARGET_IPHONE
-    	OptionCheckbox(T("VSync"), config::VSync, T("Synchronizes the frame rate with the screen refresh rate. Recommended"));
-    	ImGui::Indent();
+		OptionCheckbox(T("VSync"), config::VSync, T("Synchronizes the frame rate with the screen refresh rate. Recommended"));
+		gui_Indent();
 		{
 			DisabledScope scope(!config::VSync);
 #ifdef __ANDROID__
 			OptionCheckbox(T("Frame Pacing (Experimental)"), config::FramePacing,
 					T("Provide the GPU with presentation timing for each frame to replicate original frame pacing."));
 #else
-	    	if (isVulkan(config::RendererType))
-	    		OptionCheckbox(T("Duplicate frames"), config::DupeFrames, T("Duplicate frames on high refresh rate monitors (120 Hz and higher)"));
+			if (isVulkan(config::RendererType))
+				OptionCheckbox(T("Duplicate frames"), config::DupeFrames, T("Duplicate frames on high refresh rate monitors (120 Hz and higher)"));
 #endif
-    	}
-    	ImGui::Unindent();
+		}
+		gui_Unindent();
 #endif
     	OptionCheckbox(T("Show VMU In-game"), config::FloatVMUs, T("Show the VMU LCD screens while in-game"));
     	OptionCheckbox(T("Full Framebuffer Emulation"), config::EmulateFramebuffer,
@@ -224,7 +224,7 @@ void gui_settings_video()
     			"Very slow and incompatible with upscaling and wide screen."));
 		OptionCheckbox(T("Load Custom Textures"), config::CustomTextures,
 				T("Load custom/high-res textures from data/textures/<game id>. Supports KTX2/XUBC7, KTX2/XUASTC, KTX2/ETC1S, DDS/BC7, PNG, and JPEG."));
-		ImGui::Indent();
+		gui_Indent();
 		{
 			DisabledScope customTexturesScope(!config::CustomTextures.get());
 			const bool gpuPreloadSupported = rend_supports_gpu_texture_preload();
@@ -258,7 +258,7 @@ void gui_settings_video()
 			if (selectedMode != configuredMode)
 				config::PreloadCustomTextures = selectedMode;
 		}
-		ImGui::Unindent();
+		gui_Unindent();
     }
 	ImGui::Spacing();
     header(T("Aspect Ratio"));
@@ -268,10 +268,10 @@ void gui_settings_video()
 		{
 			DisabledScope scope(!config::Widescreen || config::IntegerScale);
 
-			ImGui::Indent();
+			gui_Indent();
 			OptionCheckbox(T("Super Widescreen"), config::SuperWidescreen,
 					T("Use the full width of the screen or window when its aspect ratio is greater than 16:9.\nAspect Fill and remove black bars. Not compatible with integer scaling."));
-			ImGui::Unindent();
+			gui_Unindent();
     	}
     	OptionCheckbox(T("Widescreen Game Cheats"), config::WidescreenGameHacks,
     			T("Modify the game so that it displays in 16:9 anamorphic format and use horizontal screen stretching. Only some games are supported."));
