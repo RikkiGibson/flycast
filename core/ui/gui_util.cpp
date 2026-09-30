@@ -306,82 +306,104 @@ bool OptionCheckbox(const char *name, config::Option<bool, PerGameOption>& optio
 template bool OptionCheckbox(const char *name, config::Option<bool, true>& option, const char *help);
 template bool OptionCheckbox(const char *name, config::Option<bool, false>& option, const char *help);
 
+float gui_TooltipSize()
+{
+	return uiScaled(40.0f);
+}
+
+float gui_SelectableWidth()
+{
+	const float rowMaxWidth = uiScaled(400.0f);
+	const float selectableWidth =
+		ImMax(0.0f,
+			ImMin(ImGui::GetContentRegionAvail().x, rowMaxWidth)
+				- (gui_TooltipSize() + ImGui::GetStyle().ItemSpacing.x)
+				- gui_indentDepth);
+	return selectableWidth;
+}
+
+void renderRowSeparator()
+{
+	// Render 'separator' from cursor to right edge of window, without moving the cursor
+	ImGui::GetWindowDrawList()->AddLine(
+		ImGui::GetCursorScreenPos(),
+		ImGui::GetCursorScreenPos() + ImVec2(ImGui::GetContentRegionAvail().x, 0),
+		ImGui::GetColorU32(ImGuiCol_Separator)
+	);
+}
+
+void renderRowTooltip(const char* help, ImVec2 rowSize)
+{
+	if (help == nullptr)
+	{
+		return;
+	}
+
+	float tooltipSize = gui_TooltipSize();
+	ImVec2 tooltipPos = ImVec2(ImGui::GetCursorScreenPos().x, ImGui::GetCursorScreenPos().y + gui_centerIn(rowSize.y, tooltipSize));
+	ImGui::SetCursorScreenPos(tooltipPos);
+	ImGui::InvisibleButton("##tooltip", ImVec2(tooltipSize, tooltipSize));
+	if (ImGui::BeginItemTooltip())
+	{
+		ImGui::PushFont(settingsTitleFont, 0.0f);
+		ImGui::PushTextWrapPos(rowSize.x);
+		ImGui::TextWrapped("%s", help); // Render 'help'
+		ImGui::PopTextWrapPos();
+		ImGui::PopFont();
+		ImGui::EndTooltip();
+	}
+
+	ImGui::PushFont(nullptr, uiScaled(21.0f));
+	ImVec2 tooltipTextSize = ImGui::CalcTextSize(ICON_FA_CIRCLE_INFO);
+	ImGui::SetCursorScreenPos(tooltipPos + gui_centerIn(ImVec2(tooltipSize, tooltipSize), tooltipTextSize));
+	ImGui::TextDisabled(ICON_FA_CIRCLE_INFO); // Render 'tooltip'
+	ImGui::PopFont();
+}
+
 bool SliderIntRow(const char* name, int* v, int v_min, int v_max, const char* format, const char* help)
 {
 	ImguiID id(name);
-	ImGui::BeginGroup();
+	// ImGui::BeginGroup();
 
 	// |----row---------------------|
 	// |----selectable----|
 	// ┌──────────────────┐─────────┐
-	// │                  │         │
-	// │ name       value │ tooltip │
-	// │                  │         │
+	// │ name             │         │
+	// │ [====slider====] │ tooltip │ <SameLine>
 	// │ separator        │         │
 	// └──────────────────┘─────────┘
 	// Space is reserved for 'tooltip' even if it is not used
 	ImVec2 initialScreenPos = ImGui::GetCursorScreenPos();
 
-	const float rowMaxWidth = uiScaled(400.0f);
-	const float rowHeight = uiScaled(40.0f); // equivalent to 48dp on Android
-	const float selectableWidth =
-		ImMax(0.0f,
-			ImMin(ImGui::GetContentRegionAvail().x, rowMaxWidth)
-				// Tooltip is square and same height as the selectable
-				- (rowHeight + ImGui::GetStyle().ItemSpacing.x)
-				- gui_indentDepth);
-
-	ImGui::Dummy(ImVec2(selectableWidth, rowHeight));
-	ImVec2 finalScreenPos = ImGui::GetCursorScreenPos();
-
-	// TODO2: this is too high now
-	ImGui::SetCursorScreenPos(ImVec2(finalScreenPos.x, ImGui::GetItemRectMax().y));
-	ImGui::Separator(); // Render 'separator'
-
+	ImGui::Spacing();
 	ImGui::PushFont(regularFont, uiScaled(21.0f));
-	ImVec2 nameTextSize = ImGui::CalcTextSize(name);
-	// Render 'name'
-	ImGui::SetCursorScreenPos(ImVec2(initialScreenPos.x, initialScreenPos.y + gui_centerIn(rowHeight, nameTextSize.y)));
-	ImGui::TextUnformatted(name);
+	ImGui::TextUnformatted(name); // Render 'name'
 	ImGui::PopFont();
 
-	if (help != nullptr)
-	{
-		// Use extra padding on the tooltip to make it easy to hit
-		ImVec2 tooltipPos = ImVec2(initialScreenPos.x + selectableWidth + ImGui::GetStyle().ItemSpacing.x, initialScreenPos.y);
-		ImGui::SetCursorScreenPos(tooltipPos);
-		ImGui::InvisibleButton("##tooltip", ImVec2(rowHeight, rowHeight));
-		if (ImGui::BeginItemTooltip())
-		{
-			ImGui::PushFont(settingsTitleFont, 0.0f);
-			ImGui::PushTextWrapPos(selectableWidth);
-			ImGui::TextWrapped("%s", help); // Render 'help'
-			ImGui::PopTextWrapPos();
-			ImGui::PopFont();
-			ImGui::EndTooltip();
-		}
-
-		ImGui::PushFont(nullptr, uiScaled(21.0f));
-		ImVec2 tooltipTextSize = ImGui::CalcTextSize(ICON_FA_CIRCLE_INFO);
-		ImGui::SetCursorScreenPos(tooltipPos + gui_centerIn(ImVec2(rowHeight, rowHeight), tooltipTextSize));
-		ImGui::TextDisabled(ICON_FA_CIRCLE_INFO); // Render 'tooltip'
-		ImGui::PopFont();
-	}
-
-	float sliderOffset = nameTextSize.x + ImGui::GetStyle().ItemSpacing.x * 2;
-	ImVec2 sliderPos(
-		initialScreenPos.x + sliderOffset,
-		initialScreenPos.y + gui_centerIn(rowHeight, ImGui::GetTextLineHeightWithSpacing()));
-	ImGui::SetCursorScreenPos(sliderPos);
-	ImGui::SetNextItemWidth(selectableWidth - sliderOffset - ImGui::GetStyle().ItemSpacing.x);
+	// Following order is a little convoluted.
+	// Slider, then separator, then tooltip last.
+	// This makes it so 'SliderIntRow(); SameLine()' moves the cursor to <SameLine> (see above).
+	ImGui::BeginGroup();
+	const float selectableWidth = gui_SelectableWidth();
+	ImGui::SetNextItemWidth(selectableWidth);
+	// Render 'slider'
 	bool valueChanged = ImGui::SliderInt("", v, v_min, v_max, format, ImGuiSliderFlags_None);
+	ImGui::SameLine();
+	ImVec2 afterSliderPos = ImGui::GetCursorScreenPos();
+	ImGui::Dummy(ImVec2(0, 0)); // move to next line
+	ImGui::Spacing();
+	ImVec2 finalPos = ImGui::GetCursorScreenPos();
 
-	// Finalize CursorScreenPos
-	ImGui::SetCursorScreenPos(finalScreenPos);
+	ImGui::SetCursorScreenPos(afterSliderPos);
+	renderRowTooltip(help, ImVec2(selectableWidth, ImGui::GetFrameHeight()));
+
+	ImGui::SetCursorScreenPos(finalPos);
 	ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0);
-	ImGui::Dummy(ImVec2(0, 0)); // Avoid 'ImGui::ErrorCheckUsingSetCursorPosToExtendParentBoundaries()' failure
+	ImGui::Dummy(ImVec2(0, 0));
 	ImGui::EndGroup();
 	ImGui::PopStyleVar();
+	// TODO2: Why is the next row overlapping with the end of this row?
+	renderRowSeparator();
 
 	return valueChanged;
 }
