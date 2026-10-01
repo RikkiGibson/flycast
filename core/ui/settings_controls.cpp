@@ -1283,7 +1283,7 @@ void gui_settings_controls(std::array<bool, 4>& mapleDevicesChanges, std::array<
 				}
 				else
 				{
-					port_count = maple_getPortCount(config::MapleMainDevices[bus]);
+					port_count = maple_getPortCount(config::MapleMainDevices[bus], MaplePortType::user_accessible);
 				}
 
 				for (int port = 0; port < port_count; port++)
