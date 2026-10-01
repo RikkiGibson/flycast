@@ -361,24 +361,15 @@ bool SliderIntRow(const char* name, int* v, int v_min, int v_max, const char* fo
 	// |----selectable----|
 	// ┌──────────────────┐─────────┐
 	// │ name             │         │
-	// │ [====slider====] │ tooltip │ <SameLine>
+	// │ [====slider====] │ tooltip │
 	// │ separator        │         │
 	// └──────────────────┘─────────┘
 	// Space is reserved for 'tooltip' even if it is not used
-	ImVec2 initialScreenPos = ImGui::GetCursorScreenPos();
-
 	ImGui::Spacing();
 	ImGui::PushFont(regularFont, uiScaled(21.0f));
 	ImGui::TextUnformatted(name); // Render 'name'
 	ImGui::PopFont();
 
-	ImVec2 sliderPos = ImGui::GetCursorScreenPos();
-	ImGui::Dummy(ImVec2(0, ImGui::GetFrameHeight() + ImGui::GetStyle().FramePadding.y));
-	renderRowSeparator(); // Render 'separator'
-	ImVec2 finalPos = ImGui::GetCursorScreenPos();
-
-	ImGui::SetCursorScreenPos(sliderPos);
-	ImGui::BeginGroup(); // Use a group for 'slider' and 'tooltip'. This allows 'SliderIntRow(); SameLine();' to place the cursor at <SameLine> (see above).
 	const float selectableWidth = gui_SelectableWidth();
 	ImGui::SetNextItemWidth(selectableWidth);
 	// Render 'slider'
@@ -389,13 +380,10 @@ bool SliderIntRow(const char* name, int* v, int v_min, int v_max, const char* fo
 		ImGui::SameLine();
 		renderRowTooltip(help, ImVec2(selectableWidth, ImGui::GetFrameHeight()));
 	}
-	else
-	{
-		ImGui::Spacing();
-	}
 
-	ImGui::EndGroup();
-	// assert(finalPos == ImGui::GetCursorScreenPos());
+	ImGui::Spacing();
+	renderRowSeparator();
+
 	return valueChanged;
 }
 
