@@ -217,7 +217,11 @@ public:
 		ImGui::BeginChild("##activeTabContent", ImVec2(0, 0), ImGuiChildFlags_NavFlattened | ImGuiChildFlags_Borders, ImGuiWindowFlags_DragScrolling);
 		ImGui::EndChild();
 
-		return ImGui::BeginChild("##verticalTabBar");
+		bool ret = ImGui::BeginChild("##verticalTabBar");
+		if (!ret)
+			ImGui::EndChild();
+
+		return ret;
 	}
 
 	void EndTabBar()
