@@ -17,7 +17,7 @@
             "cwd": "${workspaceFolder}/build/Debug/",
             "environment": [],
             "console": "internalConsole",
-            "preLaunchTask": "Build Debug"
+            // "preLaunchTask": "Build Debug"
         },
         {
             "name": "(Windows) Debug Unit Tests",
