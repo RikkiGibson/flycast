@@ -89,8 +89,7 @@ void gui_settings_audio()
 			if (options->type == AudioBackend::Option::integer)
 			{
 				int val = stoi(value);
-				// TODO2: needs manual testing or revert to baseline
-				if (SliderIntRow(options->caption.c_str(), &val, options->minValue, options->maxValue))
+				if (ImGui::SliderInt(options->caption.c_str(), &val, options->minValue, options->maxValue))
 				{
 					std::string s = std::to_string(val);
 					config::saveStr(current_backend->slug, options->name, s);
@@ -99,26 +98,25 @@ void gui_settings_audio()
 			else if (options->type == AudioBackend::Option::checkbox)
 			{
 				bool check = value == "1";
-				// TODO2: needs manual testing or revert to baseline
-				if (CheckboxRow(options->caption.c_str(), &check))
+				if (ImGui::Checkbox(options->caption.c_str(), &check))
 					config::saveStr(current_backend->slug, options->name,
 							check ? "1" : "0");
 			}
 			else if (options->type == AudioBackend::Option::list)
 			{
-				if (ComboBoxRow::BeginCombo(options->caption.c_str(), value.c_str(), ImGuiComboFlags_None))
+				if (ImGui::BeginCombo(options->caption.c_str(), value.c_str(), ImGuiComboFlags_None))
 				{
 					bool is_selected = false;
 					for (const auto& cur : options->values)
 					{
 						is_selected = value == cur;
-						if (ComboBoxRow::Selectable(cur.c_str(), &is_selected))
+						if (ImGui::Selectable(cur.c_str(), &is_selected))
 							config::saveStr(current_backend->slug, options->name, cur);
 
 						if (is_selected)
 							ImGui::SetItemDefaultFocus();
 					}
-					ComboBoxRow::EndCombo();
+					ImGui::EndCombo();
 				}
 			}
 			else {
