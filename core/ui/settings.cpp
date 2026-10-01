@@ -205,6 +205,12 @@ private:
 	const char* activeLabel = nullptr;
 	const char* nextFrameActiveLabel = nullptr;
 
+	void EndHelper()
+	{
+		ImGui::EndChild(); // ##verticalTabBar
+		ImGui::PopID();
+	}
+
 public:
 	bool BeginTabBar(const char* id)
 	{
@@ -219,15 +225,14 @@ public:
 
 		bool ret = ImGui::BeginChild("##verticalTabBar");
 		if (!ret)
-			ImGui::EndChild();
+			EndHelper();
 
 		return ret;
 	}
 
 	void EndTabBar()
 	{
-		ImGui::EndChild(); // ##verticalTabBar
-		ImGui::PopID();
+		EndHelper();
 
 		activeLabel = nextFrameActiveLabel;
 	}
