@@ -89,7 +89,7 @@ void gui_settings_audio()
 			if (options->type == AudioBackend::Option::integer)
 			{
 				int val = stoi(value);
-				// TODO2: needs manual testing
+				// TODO2: needs manual testing or revert to baseline
 				if (SliderIntRow(options->caption.c_str(), &val, options->minValue, options->maxValue))
 				{
 					std::string s = std::to_string(val);
@@ -99,7 +99,7 @@ void gui_settings_audio()
 			else if (options->type == AudioBackend::Option::checkbox)
 			{
 				bool check = value == "1";
-				// TODO2: needs manual testing
+				// TODO2: needs manual testing or revert to baseline
 				if (CheckboxRow(options->caption.c_str(), &check))
 					config::saveStr(current_backend->slug, options->name,
 							check ? "1" : "0");
