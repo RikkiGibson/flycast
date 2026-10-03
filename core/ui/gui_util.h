@@ -59,12 +59,6 @@ bool SliderIntRow(const char* name, int* v, int v_min, int v_max, const char* fo
 template<bool PerGameOption>
 bool OptionSlider(const char *name, config::Option<int, PerGameOption>& option, int min, int max, const char *help = nullptr, const char *format = nullptr);
 
-// Renders a selectable row with active state based on '*v == v_button' and with optional help text.
-bool RadioButtonRow(const char *label, int *v, int v_button, const char* help = nullptr);
-
-template<typename T>
-bool OptionRadioButton(const char *name, config::Option<T>& option, T value, const char *help = nullptr);
-
 // Renders a combo box with optional help text as a single row.
 class ComboBoxRow
 {

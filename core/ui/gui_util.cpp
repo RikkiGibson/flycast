@@ -463,34 +463,6 @@ bool OptionArrowButtons(const char *name, config::Option<int>& option, int min, 
 	return valueChanged;
 }
 
-bool RadioButtonRow(const char *label, int *v, int v_button, const char* help)
-{
-	bool pressed = renderSelectable(label, help, *v == v_button, [](ImRect) { });
-	if (pressed)
-	{
-		*v = v_button;
-	}
-
-	return pressed;
-}
-
-template<typename T>
-bool OptionRadioButton(const char *name, config::Option<T>& option, T value, const char *help)
-{
-	bool pressed;
-	{
-		DisabledScope scope(option.isReadOnly());
-
-		int v = (int)option;
-		pressed = RadioButtonRow(name, &v, (int)value, help);
-		if (pressed)
-			option.set((T)v);
-	}
-	return pressed;
-}
-template bool OptionRadioButton<bool>(const char *name, config::Option<bool>& option, bool value, const char *help);
-template bool OptionRadioButton<int>(const char *name, config::Option<int>& option, int value, const char *help);
-
 /// Render contents of a selectable option row
 /// @param renderValue function which renders the value right-justified in the given rect
 bool renderSelectable(const char* name, const char* help, bool selected, std::function<void(ImRect)> renderValue)
