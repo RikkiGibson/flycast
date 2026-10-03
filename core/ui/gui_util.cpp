@@ -353,7 +353,7 @@ void renderRowTooltip(const char* help, float rowHeight)
 	ImGui::InvisibleButton("##tooltip", ImVec2(tooltipSize, tooltipSize));
 	if (ImGui::BeginItemTooltip())
 	{
-		ImGui::PushFont(settingsTitleFont, 0.0f);
+		ImGui::PushFont(settingsTitleFont, uiScaled(17.0f));
 
 		float tooltipWrapPos = ImMin(
 			ImGui::GetMainViewport()->Size.x,
@@ -428,6 +428,71 @@ template bool OptionSlider(const char *name, config::Option<int, true>& option, 
 template bool OptionSlider(const char *name, config::Option<int, false>& option, int min, int max, const char *help, const char *format);
 
 bool OptionArrowButtons(const char *name, config::Option<int>& option, int min, int max, const char *help, const char *format)
+{
+	ImguiID id(name);
+
+	// |----row---------------------|
+	// |----selectable-------|
+	// ┌─────────────────────┐─────────┐
+	// │ name  value [<] [>] │ tooltip │
+	// │ separator           │         │
+	// └─────────────────────┘─────────┘
+
+	ImGui::Spacing();
+	ImGui::PushFont(regularFont, uiScaled(21.0f));
+	ImGui::AlignTextToFramePadding();
+	ImGui::TextUnformatted(name); // Render 'name'
+
+	float buttonsAndSpacingWidth =
+		ImGui::GetStyle().ItemSpacing.x * 4 // 4 spacings: _value_[<]_[>]_
+		+ ImGui::GetFrameHeight() * 2; // 2 frames: [<] [>]
+
+	// 'value' uses slightly larger font size than other items in 'selectable'
+	ImGui::PushFont(settingsValueFont, uiLargeFontSize());
+	std::string valueText = std::to_string(option.get());
+	float helpOffset = gui_SelectableWidth() + ImGui::GetStyle().ItemSpacing.x * 2; // 2 spacings: _|_tooltip
+	float valueOffset = helpOffset - ImGui::CalcTextSize(valueText.c_str()).x - buttonsAndSpacingWidth;
+	ImGui::SameLine(valueOffset);
+	ImGui::AlignTextToFramePadding();
+	ImGui::TextUnformatted(valueText.c_str()); // Render 'value'
+	ImGui::PopFont();
+
+	bool valueChanged = false;
+	{
+		DisabledScope scope(option.isReadOnly());
+		ImGui::PushButtonRepeat(true);
+		ImGui::SameLine();
+		if (ImGui::ArrowButton("leftButton", ImGuiDir_Left))
+		{
+			option.set(std::max(min, option - 1));
+			valueChanged = true;
+		}
+		ImGui::SameLine();
+		if (ImGui::ArrowButton("rightButton", ImGuiDir_Right))
+		{
+			option.set(std::min(max, option + 1));
+			valueChanged = true;
+		}
+		ImGui::PopButtonRepeat();
+	}
+
+	if (help != nullptr)
+	{
+		ImGui::SameLine(helpOffset);
+		renderRowTooltip(help, ImGui::GetFrameHeight());
+	}
+
+	ImGui::Spacing();
+	renderRowSeparator();
+	ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0);
+	ImGui::Dummy(ImVec2(0, 0)); // Avoid 'ImGui::ErrorCheckUsingSetCursorPosToExtendParentBoundaries()' failure
+	ImGui::PopStyleVar();
+	ImGui::PopFont();
+
+	return valueChanged;
+}
+
+bool OptionArrowButtons0(const char *name, config::Option<int>& option, int min, int max, const char *help, const char *format)
 {
 	const float innerSpacing = ImGui::GetStyle().ItemInnerSpacing.x;
 	const std::string id = "##" + std::string(name);
