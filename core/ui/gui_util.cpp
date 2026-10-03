@@ -587,8 +587,9 @@ bool ComboBox2Col::BeginCombo(const char *name, const char *value, const char *h
 	{
 		if (ImGui::BeginTable("table", 2))
 		{
-			// Use 0 vertical cell padding, then 0 vertical item spacing on Selectables
-			// This prevents both gaps between rows, and overlap between Selectables
+			// Selectables generally use a larger render box than layout box. i.e. they intentionally overflow the bounds by a certain amount.
+			// We avoid this overflowing effect on the vertical axis, and ensure there are neither gaps nor overlaps between rows,
+			// by using 0 vertical CellPadding, then 0 vertical ItemSpacing on the Selectable
 			ImGui::PushStyleVarY(ImGuiStyleVar_CellPadding, 0);
 			return true;
 		}
