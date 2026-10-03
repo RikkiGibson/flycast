@@ -34,13 +34,13 @@ static void gui_settings_advanced()
 {
 #if FEAT_SHREC != DYNAREC_NONE
 	const char* cpuModeValue = config::DynarecEnabled ? T("Dynarec") : T("Interpreter");
-    if (ComboBoxRow::BeginCombo(T("CPU Mode"), cpuModeValue))
+    if (ComboBox2Col::BeginCombo(T("CPU Mode"), cpuModeValue))
     {
-		OptionRadioButton(T("Dynarec"), config::DynarecEnabled, true,
+		ComboBox2Col::Selectable(T("Dynarec"), config::DynarecEnabled, true,
 				T("Use the dynamic recompiler. Recommended in most cases"));
-		OptionRadioButton(T("Interpreter"), config::DynarecEnabled, false,
+		ComboBox2Col::Selectable(T("Interpreter"), config::DynarecEnabled, false,
 				T("Use the interpreter. Very slow but may help in case of a dynarec problem"));
-		ComboBoxRow::EndCombo();
+		ComboBox2Col::EndCombo();
 	}
 
 	OptionSlider(T("SH4 Clock"), config::Sh4Clock, 100, 300,

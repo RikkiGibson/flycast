@@ -85,7 +85,11 @@ public:
 	static bool BeginCombo(const char* name, const char* value, const char* help = nullptr);
 	static void EndCombo();
 
-	static bool Selectable(const char* label, int* v, int v_button, const char* help = nullptr);
+	template<typename T>
+	static bool Selectable(const char* label, T* v, T v_button, const char* help = nullptr);
+
+	template<typename T, bool PerGameOption>
+	static bool Selectable(const char *label, config::Option<T, PerGameOption>& option, T value, const char *help = nullptr);
 };
 
 template<bool PerGameOption>

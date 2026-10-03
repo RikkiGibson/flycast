@@ -318,6 +318,10 @@ float gui_RowMaxWidth()
 
 float gui_SelectableWidth()
 {
+	// This helper depends on the container having a stable width.
+	// It should not be used inside containers which decide their width based on size of their children.
+	verify(ImGui::GetCurrentContext()->BeginPopupStack.Size == 0);
+
 	const float selectableWidth =
 		ImMax(0.0f,
 			ImMin(ImGui::GetContentRegionAvail().x, gui_RowMaxWidth())
@@ -461,7 +465,6 @@ bool OptionArrowButtons(const char *name, config::Option<int>& option, int min, 
 
 bool RadioButtonRow(const char *label, int *v, int v_button, const char* help)
 {
-	// TODO2: Rows flicker badly when used inside a popup.
 	bool pressed = renderSelectable(label, help, *v == v_button, [](ImRect) { });
 	if (pressed)
 	{
@@ -512,11 +515,6 @@ bool renderSelectable(const char* name, const char* help, bool selected, std::fu
 	ImGui::PushStyleVarY(ImGuiStyleVar_SelectableTextAlign, 0.5f);
 	// Render 'name' (in entire 'selectable' box)
 	bool pressed = ImGui::Selectable(name, selected, ImGuiSelectableFlags_None, ImVec2(selectableWidth, selectableHeight));
-	if (selected)
-	{
-		ImGui::SetItemDefaultFocus();
-	}
-
 	ImGui::PopStyleVar();
 	ImGui::PopFont();
 	ImVec2 finalScreenPos = ImGui::GetCursorScreenPos();
@@ -608,7 +606,8 @@ void ComboBox2Col::EndCombo()
 	ComboBoxRow::EndCombo();
 }
 
-bool ComboBox2Col::Selectable(const char *label, int *v, int v_button, const char *help)
+template<typename T>
+bool ComboBox2Col::Selectable(const char *label, T *v, T v_button, const char *help)
 {
 	ImGui::TableNextColumn();
 	ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0.0f);
@@ -632,6 +631,22 @@ bool ComboBox2Col::Selectable(const char *label, int *v, int v_button, const cha
 
     return pressed;
 }
+
+// Explicit template instantiations
+template bool ComboBox2Col::Selectable<int>(const char *label, int *v, int v_button, const char *help);
+template bool ComboBox2Col::Selectable<bool>(const char *label, bool *v, bool v_button, const char *help);
+
+template<typename T, bool PerGameOption>
+bool ComboBox2Col::Selectable(const char *label, config::Option<T, PerGameOption>& option, T value, const char *help)
+{
+	return Selectable(label, &option.get(), value, help);
+}
+
+// Explicit template instantiations
+template bool ComboBox2Col::Selectable<int, true>(const char *label, config::Option<int, true>& option, int value, const char *help);
+template bool ComboBox2Col::Selectable<int, false>(const char *label, config::Option<int, false>& option, int value, const char *help);
+template bool ComboBox2Col::Selectable<bool, true>(const char *label, config::Option<bool, true>& option, bool value, const char *help);
+template bool ComboBox2Col::Selectable<bool, false>(const char *label, config::Option<bool, false>& option, bool value, const char *help);
 
 template<bool PerGameOption>
 void OptionComboBox(const char *name, config::Option<int, PerGameOption>& option, const char *values[], int count,

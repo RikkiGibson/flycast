@@ -96,23 +96,23 @@ void gui_settings_video()
 		if (ComboBox2Col::BeginCombo(T("Graphics API"), renderApiValues.at(renderApi)))
 		{
 #ifdef USE_OPENGL
-			ComboBox2Col::Selectable("OpenGL", &renderApi, OpenGL);
+			ComboBox2Col::Selectable<int>("OpenGL", &renderApi, OpenGL);
 #endif
 #ifdef USE_VULKAN
 #ifdef __APPLE__
-			ComboBox2Col::Selectable("Vulkan (Metal)", &renderApi, Vulkan, T("MoltenVK: An implementation of Vulkan that runs on Apple's Metal graphics framework"));
+			ComboBox2Col::Selectable<int>("Vulkan (Metal)", &renderApi, Vulkan, T("MoltenVK: An implementation of Vulkan that runs on Apple's Metal graphics framework"));
 #else
-			ComboBox2Col::Selectable("Vulkan", &renderApi, Vulkan);
+			ComboBox2Col::Selectable<int>("Vulkan", &renderApi, Vulkan);
 #endif // __APPLE__
 #endif
 #ifdef USE_DX9
 			{
 				DisabledScope _(settings.platform.isNaomi2());
-				ComboBox2Col::Selectable("DirectX 9", &renderApi, DirectX9);
+				ComboBox2Col::Selectable<int>("DirectX 9", &renderApi, DirectX9);
 			}
 #endif
 #ifdef USE_DX11
-			ComboBox2Col::Selectable("DirectX 11", &renderApi, DirectX11);
+			ComboBox2Col::Selectable<int>("DirectX 11", &renderApi, DirectX11);
 #endif
 			ComboBox2Col::EndCombo();
     	}
@@ -212,23 +212,23 @@ void gui_settings_video()
 			{
 				DisabledScope readOnlyScope(config::PreloadCustomTextures.isReadOnly());
 				std::array customTexturePreloadingValues { T("Off"), T("System Memory"), T("Video Memory"), };
-				if (ComboBoxRow::BeginCombo(T("Custom Texture Preloading"), customTexturePreloadingValues.at(selectedMode)))
+				if (ComboBox2Col::BeginCombo(T("Custom Texture Preloading"), customTexturePreloadingValues.at(selectedMode)))
 				{
-					RadioButtonRow(T("Off"), &selectedMode,
+					ComboBox2Col::Selectable(T("Off"), &selectedMode,
 							static_cast<int>(config::CustomTexturePreloadMode::Off),
 						T("Load custom textures as needed."));
-					RadioButtonRow(T("System Memory"), &selectedMode,
+					ComboBox2Col::Selectable(T("System Memory"), &selectedMode,
 							static_cast<int>(config::CustomTexturePreloadMode::SystemMemory),
 						T("Preload custom textures at game start to prevent texture popping. Consumes system memory for the entire texture pack."));
 					{
 						DisabledScope videoMemoryScope(!gpuPreloadSupported);
-						RadioButtonRow(T("Video Memory"), &selectedMode,
+						ComboBox2Col::Selectable(T("Video Memory"), &selectedMode,
 							static_cast<int>(config::CustomTexturePreloadMode::VideoMemory),
 							gpuPreloadSupported
 								? T("Preload custom textures at game start to prevent texture popping. Consumes video memory for the entire texture pack.")
 								: T("Video-memory custom texture preloading is not supported by the current renderer."));
 					}
-					ComboBoxRow::EndCombo();
+					ComboBox2Col::EndCombo();
 				}
 			}
 			if (selectedMode != configuredMode)
@@ -290,12 +290,12 @@ void gui_settings_video()
     header(T("Performance"));
     {
 		std::array autoskipValues { T("Disabled"), T("Normal"), T("Maximum"), };
-		if (ComboBoxRow::BeginCombo(T("Automatic Frame Skipping:"), autoskipValues.at(config::AutoSkipFrame)))
+		if (ComboBox2Col::BeginCombo(T("Automatic Frame Skipping:"), autoskipValues.at(config::AutoSkipFrame)))
 		{
-			OptionRadioButton(T("Disabled"), config::AutoSkipFrame, 0, T("No frame skipping"));
-			OptionRadioButton(T("Normal"), config::AutoSkipFrame, 1, T("Skip a frame when the GPU and CPU are both running slow"));
-			OptionRadioButton(T("Maximum"), config::AutoSkipFrame, 2, T("Skip a frame when the GPU is running slow"));
-			ComboBoxRow::EndCombo();
+			ComboBox2Col::Selectable(T("Disabled"), config::AutoSkipFrame, 0, T("No frame skipping"));
+			ComboBox2Col::Selectable(T("Normal"), config::AutoSkipFrame, 1, T("Skip a frame when the GPU and CPU are both running slow"));
+			ComboBox2Col::Selectable(T("Maximum"), config::AutoSkipFrame, 2, T("Skip a frame when the GPU is running slow"));
+			ComboBox2Col::EndCombo();
 		}
 
     	OptionArrowButtons(T("Frame Skipping"), config::SkipFrame, 0, 6,
@@ -340,12 +340,12 @@ void gui_settings_video()
 
 		std::array textureFilteringValues { T("Default"), T("Force Nearest-Neighbor"), T("Force Linear"),
 		};
-		if (ComboBoxRow::BeginCombo(T("Texture Filtering:"), textureFilteringValues.at(config::TextureFiltering)))
+		if (ComboBox2Col::BeginCombo(T("Texture Filtering:"), textureFilteringValues.at(config::TextureFiltering)))
 		{
-    		OptionRadioButton(T("Default"), config::TextureFiltering, 0, T("Use the game's default texture filtering"));
-    		OptionRadioButton(T("Force Nearest-Neighbor"), config::TextureFiltering, 1, T("Force nearest-neighbor filtering for all textures. Crisper appearance, but may cause various rendering issues. This option usually does not affect performance."));
-			OptionRadioButton(T("Force Linear"), config::TextureFiltering, 2, T("Force linear filtering for all textures. Smoother appearance, but may cause various rendering issues. This option usually does not affect performance."));
-			ComboBoxRow::EndCombo();
+    		ComboBox2Col::Selectable(T("Default"), config::TextureFiltering, 0, T("Use the game's default texture filtering"));
+    		ComboBox2Col::Selectable(T("Force Nearest-Neighbor"), config::TextureFiltering, 1, T("Force nearest-neighbor filtering for all textures. Crisper appearance, but may cause various rendering issues. This option usually does not affect performance."));
+			ComboBox2Col::Selectable(T("Force Linear"), config::TextureFiltering, 2, T("Force linear filtering for all textures. Smoother appearance, but may cause various rendering issues. This option usually does not affect performance."));
+			ComboBox2Col::EndCombo();
 		}
 
     	OptionCheckbox(T("Show FPS Counter"), config::ShowFPS, T("Show on-screen frame/sec counter"));

@@ -37,13 +37,13 @@ void gui_settings_network()
 			netType = 3;
 
 		std::array netTypeValues { T("Native"), "GGPO", "Naomi", T("Battle Cable"), };
-		if (ComboBoxRow::BeginCombo(T("Network Type"), netTypeValues.at(netType)))
+		if (ComboBox2Col::BeginCombo(T("Network Type"), netTypeValues.at(netType)))
 		{
-			RadioButtonRow(T("Native"), &netType, 0, T("Use native Dreamcast online features using the modem or Broadband Adapter"));
-			RadioButtonRow("GGPO", &netType, 1, T("Enable networking using GGPO"));
-			RadioButtonRow("Naomi", &netType, 2, T("Enable networking for supported Naomi and Atomiswave games"));
-			RadioButtonRow(T("Battle Cable"), &netType, 3, T("Emulate the Taisen (Battle) null modem cable for games that support it"));
-			ComboBoxRow::EndCombo();
+			ComboBox2Col::Selectable(T("Native"), &netType, 0, T("Use native Dreamcast online features using the modem or Broadband Adapter"));
+			ComboBox2Col::Selectable("GGPO", &netType, 1, T("Enable networking using GGPO"));
+			ComboBox2Col::Selectable("Naomi", &netType, 2, T("Enable networking for supported Naomi and Atomiswave games"));
+			ComboBox2Col::Selectable(T("Battle Cable"), &netType, 3, T("Emulate the Taisen (Battle) null modem cable for games that support it"));
+			ComboBox2Col::EndCombo();
 		}
 
 		config::GGPOEnable = false;
@@ -77,12 +77,14 @@ void gui_settings_network()
 			OptionSlider(T("Frame Delay"), config::GGPODelay, 0, 20,
 					T("Sets Frame Delay, advisable for sessions with ping >100 ms"));
 
-			ImGui::Text("%s", T("Left Thumbstick:"));
-			OptionRadioButton<int>((Ts("Disabled") + "##analogaxis").c_str(), config::GGPOAnalogAxes, 0, T("Left thumbstick not used"));
-			ImGui::SameLine();
-			OptionRadioButton<int>(T("Horizontal"), config::GGPOAnalogAxes, 1, T("Use the left thumbstick horizontal axis only"));
-			ImGui::SameLine();
-			OptionRadioButton<int>(T("Full"), config::GGPOAnalogAxes, 2, T("Use the left thumbstick horizontal and vertical axes"));
+			std::array leftThumbstickValues { T("Disabled"), T("Horizontal"), T("Full") };
+			if (ComboBox2Col::BeginCombo(T("Left Thumbstick:"), leftThumbstickValues.at(config::GGPOAnalogAxes)))
+			{
+				ComboBox2Col::Selectable((Ts("Disabled") + "##analogaxis").c_str(), config::GGPOAnalogAxes, 0, T("Left thumbstick not used"));
+				ComboBox2Col::Selectable(T("Horizontal"), config::GGPOAnalogAxes, 1, T("Use the left thumbstick horizontal axis only"));
+				ComboBox2Col::Selectable(T("Full"), config::GGPOAnalogAxes, 2, T("Use the left thumbstick horizontal and vertical axes"));
+				ComboBox2Col::EndCombo();
+			}
 
 			OptionCheckbox(T("Enable Chat"), config::GGPOChat, T("Open the chat window when a chat message is received"));
 			if (config::GGPOChat)
@@ -109,12 +111,12 @@ void gui_settings_network()
 				role = config::NaomiSatellite ? 2 : 1;
 
 			std::array networkRoleValues { T("Master"), T("Slave"), T("Satellite") };
-			if (ComboBoxRow::BeginCombo(T("Network Role"), networkRoleValues.at(role)))
+			if (ComboBox2Col::BeginCombo(T("Network Role"), networkRoleValues.at(role)))
 			{
-				RadioButtonRow(T("Master"), &role, 0, T("Create a local server for Naomi network games"));
-				RadioButtonRow(T("Slave"), &role, 1, T("Connect to the master server"));
-				RadioButtonRow(T("Satellite"), &role, 2, T("Live monitor for games that support it (Virtual-On Oratorio Tangram and Club Kart)"));
-				ComboBoxRow::EndCombo();
+				ComboBox2Col::Selectable(T("Master"), &role, 0, T("Create a local server for Naomi network games"));
+				ComboBox2Col::Selectable(T("Slave"), &role, 1, T("Connect to the master server"));
+				ComboBox2Col::Selectable(T("Satellite"), &role, 2, T("Live monitor for games that support it (Virtual-On Oratorio Tangram and Club Kart)"));
+				ComboBox2Col::EndCombo();
 			}
 
 			if (!config::ActAsServer)
