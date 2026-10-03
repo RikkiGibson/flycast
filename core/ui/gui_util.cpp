@@ -511,7 +511,7 @@ bool renderSelectable(const char* name, const char* help, bool selected, std::fu
 	const float selectableHeight = gui_RowHeight();
 	const float selectableWidth = gui_SelectableWidth();
 
-	ImGui::PushFont(regularFont, uiScaled(21.0f));
+	ImGui::PushFont(regularFont, uiScaled(20.0f));
 	ImGui::PushStyleVarY(ImGuiStyleVar_SelectableTextAlign, 0.5f);
 	// Render 'name' (in entire 'selectable' box)
 	bool pressed = ImGui::Selectable(name, selected, ImGuiSelectableFlags_None, ImVec2(selectableWidth, selectableHeight));
@@ -540,7 +540,7 @@ bool renderSelectable(const char* name, const char* help, bool selected, std::fu
 bool ComboBoxRow::BeginCombo(const char* name, const char* value, const char* help)
 {
 	std::function<void(ImRect)> renderValue = [value](ImRect rect) {
-		ImGui::PushFont(settingsValueFont, uiScaled(24.0f));
+		ImGui::PushFont(settingsValueFont, uiLargeFontSize());
 		ImVec2 valueSize = ImGui::CalcTextSize(value);
 		ImVec2 valuePos(
 			rect.Max.x - valueSize.x,
