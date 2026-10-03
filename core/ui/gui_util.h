@@ -44,11 +44,18 @@ void scrollWhenDraggingOnVoid(ImGuiMouseButton mouse_button = ImGuiMouseButton_L
 // Helper to display a little (?) mark which shows a tooltip when hovered.
 void ShowHelpMarker(const char* desc);
 
+void gui_Indent(float depth = 0.0f);
+void gui_Unindent(float depth = 0.0f);
+
 // Renders a checkbox with optional help text as a single row.
 bool CheckboxRow(const char* name, bool* value, const char* help = nullptr);
 
 template<bool PerGameOption>
 bool OptionCheckbox(const char *name, config::Option<bool, PerGameOption>& option, const char *help = nullptr);
+
+// Renders a slider with optional help text as a single row.
+bool SliderIntRow(const char* name, int* v, int v_min, int v_max, const char* format = "%d", const char* help = nullptr);
+
 template<bool PerGameOption>
 bool OptionSlider(const char *name, config::Option<int, PerGameOption>& option, int min, int max, const char *help = nullptr, const char *format = nullptr);
 template<typename T>

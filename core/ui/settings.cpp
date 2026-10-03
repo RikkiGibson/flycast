@@ -108,7 +108,7 @@ static void gui_settings_advanced()
 		}
         OptionCheckbox(T("Dump Textures"), config::DumpTextures,
         		T("Dump all textures into data/texdump/<game id>"));
-		ImGui::Indent();
+		gui_Indent();
 		{
 			DisabledScope scope(!config::DumpTextures.get());
 			OptionCheckbox(T("Dump Replaced Textures"), config::DumpReplacedTextures,
@@ -116,12 +116,10 @@ static void gui_settings_advanced()
 			OptionCheckbox(T("Discard Video and Animated Textures"), config::DumpUniqueTextures,
 					T("Skip dumping video (YUV) and already updated textures"));
 		}
-		ImGui::Unindent();
+		gui_Unindent();
         bool logToFile = config::loadBool("log", "LogToFile", false);
-		if (CheckboxRow(T("Log to File"), &logToFile))
+		if (CheckboxRow(T("Log to File"), &logToFile, T("Log debug information to flycast.log")))
 			config::saveBool("log", "LogToFile", logToFile);
-        ImGui::SameLine();
-        ShowHelpMarker(T("Log debug information to flycast.log"));
 #ifdef SENTRY_UPLOAD
         OptionCheckbox(T("Automatically Report Crashes"), config::UploadCrashLogs,
         		T("Automatically upload crash reports to sentry.io to help in troubleshooting. No personal information is included."));
@@ -207,6 +205,12 @@ private:
 	const char* activeLabel = nullptr;
 	const char* nextFrameActiveLabel = nullptr;
 
+	void EndHelper()
+	{
+		ImGui::EndChild(); // ##verticalTabBar
+		ImGui::PopID();
+	}
+
 public:
 	bool BeginTabBar(const char* id)
 	{
@@ -219,13 +223,16 @@ public:
 		ImGui::BeginChild("##activeTabContent", ImVec2(0, 0), ImGuiChildFlags_NavFlattened | ImGuiChildFlags_Borders, ImGuiWindowFlags_DragScrolling);
 		ImGui::EndChild();
 
-		return ImGui::BeginChild("##verticalTabBar");
+		bool ret = ImGui::BeginChild("##verticalTabBar");
+		if (!ret)
+			EndHelper();
+
+		return ret;
 	}
 
 	void EndTabBar()
 	{
-		ImGui::EndChild(); // ##verticalTabBar
-		ImGui::PopID();
+		EndHelper();
 
 		activeLabel = nextFrameActiveLabel;
 	}

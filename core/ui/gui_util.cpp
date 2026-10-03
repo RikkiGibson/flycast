@@ -241,6 +241,34 @@ void ShowHelpMarker(const char* desc)
     }
 }
 
+float gui_indentDepth;
+
+void gui_Indent(float depth)
+{
+	float xBefore = ImGui::GetCursorScreenPos().x;
+	ImGui::Indent(depth);
+	float xAfter = ImGui::GetCursorScreenPos().x;
+	gui_indentDepth += xAfter - xBefore;
+}
+
+void gui_Unindent(float depth)
+{
+	float xBefore = ImGui::GetCursorScreenPos().x;
+	ImGui::Unindent(depth);
+	float xAfter = ImGui::GetCursorScreenPos().x;
+	gui_indentDepth += xAfter - xBefore;
+}
+
+float gui_centerIn(float containerSize, float itemSize)
+{
+	return (containerSize - itemSize) / 2;
+}
+
+ImVec2 gui_centerIn(ImVec2 containerSize, ImVec2 itemSize)
+{
+	return (containerSize - itemSize) / 2;
+}
+
 bool renderSelectable(const char* name, const char* help, bool selected, std::function<void(ImRect)> renderValue);
 
 bool CheckboxRow(const char* name, bool* value, const char* help)
@@ -278,6 +306,96 @@ bool OptionCheckbox(const char *name, config::Option<bool, PerGameOption>& optio
 template bool OptionCheckbox(const char *name, config::Option<bool, true>& option, const char *help);
 template bool OptionCheckbox(const char *name, config::Option<bool, false>& option, const char *help);
 
+float gui_RowHeight()
+{
+	return uiScaled(40.0f);
+}
+
+float gui_SelectableWidth()
+{
+	const float rowMaxWidth = uiScaled(400.0f);
+	const float selectableWidth =
+		ImMax(0.0f,
+			ImMin(ImGui::GetContentRegionAvail().x, rowMaxWidth)
+				- (gui_RowHeight() + ImGui::GetStyle().ItemSpacing.x)
+				- gui_indentDepth);
+	return selectableWidth;
+}
+
+void renderRowSeparator()
+{
+	float thickness = 1.0f;
+	ImVec2 pos = ImVec2(ImGui::GetCursorScreenPos().x, ImGui::GetCursorScreenPos().y - ImGui::GetStyle().FramePadding.y - thickness);
+	ImGui::GetWindowDrawList()->AddLine( // Render 'separator'
+        pos,
+        ImVec2(pos.x + ImGui::GetContentRegionAvail().x, pos.y),
+        ImGui::GetColorU32(ImGuiCol_Separator),
+		thickness
+    );
+}
+
+void renderRowTooltip(const char* help, float tooltipWrapPos, float rowHeight)
+{
+	verify(help != nullptr);
+
+	float tooltipSize = gui_RowHeight();
+	ImVec2 tooltipPos = ImVec2(ImGui::GetCursorScreenPos().x, ImGui::GetCursorScreenPos().y + gui_centerIn(rowHeight, tooltipSize));
+	ImGui::SetCursorScreenPos(tooltipPos);
+	ImGui::InvisibleButton("##tooltip", ImVec2(tooltipSize, tooltipSize));
+	if (ImGui::BeginItemTooltip())
+	{
+		ImGui::PushFont(settingsTitleFont, 0.0f);
+		ImGui::PushTextWrapPos(tooltipWrapPos);
+		ImGui::TextWrapped("%s", help); // Render 'help'
+		ImGui::PopTextWrapPos();
+		ImGui::PopFont();
+		ImGui::EndTooltip();
+	}
+
+	ImGui::PushFont(nullptr, uiScaled(21.0f));
+	ImVec2 tooltipTextSize = ImGui::CalcTextSize(ICON_FA_CIRCLE_INFO);
+	ImGui::SetCursorScreenPos(tooltipPos + gui_centerIn(ImVec2(tooltipSize, tooltipSize), tooltipTextSize));
+	ImGui::TextDisabled(ICON_FA_CIRCLE_INFO); // Render 'tooltip'
+	ImGui::PopFont();
+}
+
+bool SliderIntRow(const char* name, int* v, int v_min, int v_max, const char* format, const char* help)
+{
+	ImguiID id(name);
+
+	// |----row---------------------|
+	// |----selectable----|
+	// ┌──────────────────┐─────────┐
+	// │ name             │         │
+	// │ [====slider====] │ tooltip │
+	// │ separator        │         │
+	// └──────────────────┘─────────┘
+	// Space is reserved for 'tooltip' even if it is not used
+	ImGui::Spacing();
+	ImGui::PushFont(regularFont, uiScaled(21.0f));
+	ImGui::TextUnformatted(name); // Render 'name'
+	ImGui::PopFont();
+
+	const float selectableWidth = gui_SelectableWidth();
+	ImGui::SetNextItemWidth(selectableWidth);
+	// Render 'slider'
+	bool valueChanged = ImGui::SliderInt("", v, v_min, v_max, format, ImGuiSliderFlags_None);
+
+	if (help != nullptr)
+	{
+		ImGui::SameLine();
+		renderRowTooltip(help, selectableWidth, ImGui::GetFrameHeight());
+	}
+
+	ImGui::Spacing();
+	renderRowSeparator();
+	ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0);
+	ImGui::Dummy(ImVec2(0, 0)); // Avoid 'ImGui::ErrorCheckUsingSetCursorPosToExtendParentBoundaries()' failure
+	ImGui::PopStyleVar();
+
+	return valueChanged;
+}
+
 template<bool PerGameOption>
 bool OptionSlider(const char *name, config::Option<int, PerGameOption>& option, int min, int max, const char *help, const char *format)
 {
@@ -286,14 +404,9 @@ bool OptionSlider(const char *name, config::Option<int, PerGameOption>& option, 
 		DisabledScope scope(option.isReadOnly());
 
 		int v = option;
-		valueChanged = ImGui::SliderInt(name, &v, min, max, format);
+		valueChanged = SliderIntRow(name, &v, min, max, format, help);
 		if (valueChanged)
 			option.set(v);
-	}
-	if (help != nullptr)
-	{
-		ImGui::SameLine();
-		ShowHelpMarker(help);
 	}
 	return valueChanged;
 }
@@ -358,7 +471,7 @@ bool OptionRadioButton(const char *name, config::Option<T>& option, T value, con
 template bool OptionRadioButton<bool>(const char *name, config::Option<bool>& option, bool value, const char *help);
 template bool OptionRadioButton<int>(const char *name, config::Option<int>& option, int value, const char *help);
 
-/// Render contents of an option row
+/// Render contents of a selectable option row
 /// @param renderValue function which renders the value right-justified in the given rect
 bool renderSelectable(const char* name, const char* help, bool selected, std::function<void(ImRect)> renderValue)
 {
@@ -375,47 +488,21 @@ bool renderSelectable(const char* name, const char* help, bool selected, std::fu
 	// Space is reserved for 'tooltip' even if it is not used
 	ImVec2 initialScreenPos = ImGui::GetCursorScreenPos();
 
-	const float rowMaxWidth = uiScaled(400.0f);
-	const float selectableHeight = uiScaled(40.0f); // equivalent to 48dp on Android
-	const float selectableWidth =
-		ImMax(0.0f,
-			ImMin(ImGui::GetContentRegionAvail().x, rowMaxWidth)
-				// Tooltip is square and same height as the selectable
-				- (selectableHeight + ImGui::GetStyle().ItemSpacing.x));
+	const float selectableHeight = gui_RowHeight();
+	const float selectableWidth = gui_SelectableWidth();
 
 	ImGui::PushFont(regularFont, uiScaled(21.0f));
-	ImVec2 nameTextSize = ImGui::CalcTextSize(name);
 	ImGui::PushStyleVarY(ImGuiStyleVar_SelectableTextAlign, 0.5f);
-	// Render 'name'
+	// Render 'name' (in entire 'selectable' box)
 	bool pressed = ImGui::Selectable(name, selected, ImGuiSelectableFlags_None, ImVec2(selectableWidth, selectableHeight));
 	ImGui::PopStyleVar();
 	ImGui::PopFont();
-
 	ImVec2 finalScreenPos = ImGui::GetCursorScreenPos();
-	ImGui::SetCursorScreenPos(ImVec2(finalScreenPos.x, ImGui::GetItemRectMax().y));
-	ImGui::Separator(); // Render 'separator'
 
 	if (help != nullptr)
 	{
-		// Use extra padding on the tooltip to make it easy to hit
-		ImVec2 tooltipPos = ImVec2(initialScreenPos.x + selectableWidth + ImGui::GetStyle().ItemSpacing.x, initialScreenPos.y);
-		ImGui::SetCursorScreenPos(tooltipPos);
-		ImGui::InvisibleButton("##tooltip", ImVec2(selectableHeight, selectableHeight));
-		if (ImGui::BeginItemTooltip())
-		{
-			ImGui::PushFont(settingsTitleFont, 0.0f);
-			ImGui::PushTextWrapPos(selectableWidth);
-			ImGui::TextWrapped("%s", help); // Render 'help'
-			ImGui::PopTextWrapPos();
-			ImGui::PopFont();
-			ImGui::EndTooltip();
-		}
-
-		ImGui::PushFont(nullptr, uiScaled(21.0f));
-		ImVec2 tooltipTextSize = ImGui::CalcTextSize(ICON_FA_CIRCLE_INFO);
-		ImGui::SetCursorScreenPos(ImVec2(tooltipPos.x + (selectableHeight - tooltipTextSize.x) / 2, tooltipPos.y + (selectableHeight - tooltipTextSize.y) / 2));
-		ImGui::TextDisabled(ICON_FA_CIRCLE_INFO); // Render 'tooltip'
-		ImGui::PopFont();
+		ImGui::SameLine();
+		renderRowTooltip(help, selectableWidth, selectableHeight);
 	}
 
 	renderValue(ImRect(initialScreenPos, ImVec2(finalScreenPos.x + selectableWidth, finalScreenPos.y)));
@@ -425,6 +512,7 @@ bool renderSelectable(const char* name, const char* help, bool selected, std::fu
 	ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0);
 	ImGui::Dummy(ImVec2(0, 0)); // Avoid 'ImGui::ErrorCheckUsingSetCursorPosToExtendParentBoundaries()' failure
 	ImGui::PopStyleVar();
+	renderRowSeparator();
 
 	return pressed;
 }

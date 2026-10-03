@@ -323,7 +323,7 @@ void achievementList()
 			if (ach.category != category)
 			{
 				category = ach.category;
-				ImGui::Indent(uiScaled(10));
+				gui_Indent(uiScaled(10));
 				if (category == Tnop("Locked") || category == Tnop("Active Challenges") || category == Tnop("Almost There"))
 					ImGui::Text(ICON_FA_LOCK);
 				else if (category == Tnop("Unlocked") || category == Tnop("Recently Unlocked"))
@@ -332,7 +332,7 @@ void achievementList()
 				ImGui::PushFont(nullptr, uiLargeFontSize());
 				ImGui::Text("%s", T(category.c_str()));
 				ImGui::PopFont();
-				ImGui::Unindent(uiScaled(10));
+				gui_Unindent(uiScaled(10));
 			}
 			ImguiID _("achiev" + std::to_string(id++));
 			ImguiFileTexture tex(ach.image);
