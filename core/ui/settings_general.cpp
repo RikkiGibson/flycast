@@ -523,6 +523,10 @@ static void applyDarkTheme()
 
 	// Apply original Flycast styling to match exactly how it was
 	ImGuiStyle& style = ImGui::GetStyle();
+
+	// Use opaque background for popups for improved visibility
+	style.Colors[ImGuiCol_PopupBg].w = 1.00f;
+
 	style.TabRounding = 5.0f;
 	style.FrameRounding = 3.0f;
 	style.ItemSpacing = ImVec2(8, 8);		// from 8,4
