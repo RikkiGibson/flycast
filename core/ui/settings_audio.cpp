@@ -54,7 +54,7 @@ void gui_settings_audio()
 	}
 
 	AudioBackend *current_backend = backend;
-	if (ComboBoxRow::BeginCombo(T("Audio Driver"), backend_name.c_str(), ImGuiComboFlags_None, T("The audio driver to use")))
+	if (ComboBoxRow::BeginCombo(T("Audio Driver"), backend_name.c_str(), T("The audio driver to use")))
 	{
 		bool is_selected = (config::AudioBackend.get() == "auto");
 		if (ComboBoxRow::Selectable(T("auto - Automatic driver selection"), &is_selected))

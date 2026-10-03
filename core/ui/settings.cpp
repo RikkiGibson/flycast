@@ -154,7 +154,7 @@ static void gui_debug_tab()
 		ImGui::Spacing();
 
 		static const char *levels[] = { "Notice", "Error", "Warning", "Info", "Debug" };
-		if (ComboBoxRow::BeginCombo("Log Verbosity", levels[logManager->GetLogLevel() - 1], ImGuiComboFlags_None))
+		if (ComboBoxRow::BeginCombo("Log Verbosity", levels[logManager->GetLogLevel() - 1]))
 		{
 			for (std::size_t i = 0; i < std::size(levels); i++)
 			{

@@ -537,10 +537,8 @@ bool renderSelectable(const char* name, const char* help, bool selected, std::fu
 	return pressed;
 }
 
-bool ComboBoxRow::BeginCombo(const char* name, const char* value, ImGuiComboFlags flags, const char* help)
+bool ComboBoxRow::BeginCombo(const char* name, const char* value, const char* help)
 {
-	verify(flags == ImGuiComboFlags_None);
-
 	std::function<void(ImRect)> renderValue = [value](ImRect rect) {
 		ImGui::PushFont(settingsValueFont, uiScaled(24.0f));
 		ImVec2 valueSize = ImGui::CalcTextSize(value);
@@ -583,7 +581,7 @@ bool ComboBoxRow::Selectable(const char* label, bool selected, const ImVec2& siz
 
 bool ComboBox2Col::BeginCombo(const char *name, const char *value, const char *help)
 {
-	if (ComboBoxRow::BeginCombo(name, value, ImGuiComboFlags_None, help))
+	if (ComboBoxRow::BeginCombo(name, value, help))
 	{
 		if (ImGui::BeginTable("table", 2))
 		{
@@ -657,7 +655,7 @@ void OptionComboBox(const char *name, config::Option<int, PerGameOption>& option
 		DisabledScope scope(option.isReadOnly());
 
 		const char *value = option >= 0 && option < count ? values[option] : "?";
-		if (ComboBoxRow::BeginCombo(name, value, ImGuiComboFlags_None, help))
+		if (ComboBoxRow::BeginCombo(name, value, help))
 		{
 			for (int i = 0; i < count; i++)
 			{

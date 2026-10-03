@@ -168,7 +168,7 @@ void gui_settings_video()
         }
 
 		const char* renderResolutionHelp = T("Internal render resolution. Higher is better, but more demanding on the GPU. Values higher than your display resolution (but no more than double your display resolution) can be used for supersampling, which provides high-quality antialiasing without reducing sharpness.");
-        if (ComboBoxRow::BeginCombo(T("Internal Resolution"), resLabels[selected].c_str(), ImGuiComboFlags_None, renderResolutionHelp))
+        if (ComboBoxRow::BeginCombo(T("Internal Resolution"), resLabels[selected].c_str(), renderResolutionHelp))
         {
         	for (u32 i = 0; i < scalings.size(); i++)
             {
@@ -268,7 +268,7 @@ void gui_settings_video()
 				break;
 		if (selected == bufSizes.size())
 			selected = 0;
-		if (ComboBoxRow::BeginCombo(T("Pixel Buffer Size"), bufSizesText[selected].c_str(), ImGuiComboFlags_None, T("The size of the pixel buffer. May need to be increased when upscaling by a large factor.")))
+		if (ComboBoxRow::BeginCombo(T("Pixel Buffer Size"), bufSizesText[selected].c_str(), T("The size of the pixel buffer. May need to be increased when upscaling by a large factor.")))
 		{
 			for (u32 i = 0; i < bufSizes.size(); i++)
 			{
@@ -325,7 +325,7 @@ void gui_settings_video()
         }
 
 		const char* anisotropicFilteringHelp = T("Higher values make textures viewed at oblique angles look sharper, but are more demanding on the GPU. This option only has a visible impact on mipmapped textures.");
-        if (ComboBoxRow::BeginCombo(T("Anisotropic Filtering"), anisoText[afSelected].c_str(), ImGuiComboFlags_None, anisotropicFilteringHelp))
+        if (ComboBoxRow::BeginCombo(T("Anisotropic Filtering"), anisoText[afSelected].c_str(), anisotropicFilteringHelp))
         {
         	for (u32 i = 0; i < aniso.size(); i++)
             {

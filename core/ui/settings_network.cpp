@@ -246,12 +246,14 @@ void gui_settings_network()
 	}
 #ifdef NAOMI_MULTIBOARD
 	ImGui::Spacing();
-	header(T("Multiboard Screens"));
+
+	std::array multiboardValues { T("1 (Twin, Satellite)"), T("2+ (Deluxe, Main screen)") };
+	if (ComboBox2Col::BeginCombo(T("Multiboard Screens"), multiboardValues.at(config::MultiboardSlaves - 1)))
 	{
-		OptionRadioButton<int>(T("1 (Twin, Satellite)"), config::MultiboardSlaves, 1, T("One screen configuration (F355 Twin, Derby Owners Club satellite)"));
-		ImGui::SameLine(); // TODO: line is breaking unexpectedly
-		OptionRadioButton<int>(T("2+ (Deluxe, Main screen)"), config::MultiboardSlaves, 2,
+		ComboBox2Col::Selectable(T("1 (Twin, Satellite)"), config::MultiboardSlaves, 1, T("One screen configuration (F355 Twin, Derby Owners Club satellite)"));
+		ComboBox2Col::Selectable(T("2+ (Deluxe, Main screen)"), config::MultiboardSlaves, 2,
 				T("Two or three screens configuration (Airline Pilot, Derby Owners Club main screen, F355 Deluxe, Sega Strike Fighter)"));
+		ComboBox2Col::EndCombo();
 	}
 #endif
 }

@@ -253,7 +253,7 @@ void gui_settings_general()
 		const char *value = config::Cable == 0 ? cable[0]
 				: config::Cable > 0 && config::Cable <= (int)std::size(cable) ? cable[config::Cable - 1]
 				: "?";
-		if (ComboBoxRow::BeginCombo(T("Cable"), value, ImGuiComboFlags_None, T("Video connection type")))
+		if (ComboBoxRow::BeginCombo(T("Cable"), value, T("Video connection type")))
 		{
 			for (int i = 0; i < IM_ARRAYSIZE(cable); i++)
 			{

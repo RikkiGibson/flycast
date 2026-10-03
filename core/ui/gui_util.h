@@ -59,7 +59,7 @@ bool SliderIntRow(const char* name, int* v, int v_min, int v_max, const char* fo
 template<bool PerGameOption>
 bool OptionSlider(const char *name, config::Option<int, PerGameOption>& option, int min, int max, const char *help = nullptr, const char *format = nullptr);
 
-// Renders a selectable row with active state based on 'v'/'v_button' and with optional help text.
+// Renders a selectable row with active state based on '*v == v_button' and with optional help text.
 bool RadioButtonRow(const char *label, int *v, int v_button, const char* help = nullptr);
 
 template<typename T>
@@ -70,7 +70,7 @@ class ComboBoxRow
 {
 public:
 	// TODO2: flags param should be deleted
-	static bool BeginCombo(const char* name, const char* value, ImGuiComboFlags flags = 0, const char* help = nullptr);
+	static bool BeginCombo(const char* name, const char* value, const char* help = nullptr);
 	static void EndCombo();
 
 	static bool Selectable(const char* label, bool* selected, const ImVec2& size = ImVec2(0, 0));
