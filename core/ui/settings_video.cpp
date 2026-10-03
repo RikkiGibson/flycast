@@ -93,44 +93,44 @@ void gui_settings_video()
 			"DirectX 9",
 			"DirectX 11",
 		};
-		if (ComboBoxRow::BeginCombo(T("Graphics API"), renderApiValues.at(renderApi)))
+		if (ComboBox2Col::BeginCombo(T("Graphics API"), renderApiValues.at(renderApi)))
 		{
 #ifdef USE_OPENGL
-			RadioButtonRow("OpenGL", &renderApi, OpenGL);
+			ComboBox2Col::Selectable("OpenGL", &renderApi, OpenGL);
 #endif
 #ifdef USE_VULKAN
 #ifdef __APPLE__
-			RadioButtonRow("Vulkan (Metal)", &renderApi, Vulkan, T("MoltenVK: An implementation of Vulkan that runs on Apple's Metal graphics framework"));
+			ComboBox2Col::Selectable("Vulkan (Metal)", &renderApi, Vulkan, T("MoltenVK: An implementation of Vulkan that runs on Apple's Metal graphics framework"));
 #else
-			RadioButtonRow("Vulkan", &renderApi, Vulkan);
+			ComboBox2Col::Selectable("Vulkan", &renderApi, Vulkan);
 #endif // __APPLE__
 #endif
 #ifdef USE_DX9
 			{
 				DisabledScope _(settings.platform.isNaomi2());
-				RadioButtonRow("DirectX 9", &renderApi, DirectX9);
+				ComboBox2Col::Selectable("DirectX 9", &renderApi, DirectX9);
 			}
 #endif
 #ifdef USE_DX11
-			RadioButtonRow("DirectX 11", &renderApi, DirectX11);
+			ComboBox2Col::Selectable("DirectX 11", &renderApi, DirectX11);
 #endif
-			ComboBoxRow::EndCombo();
+			ComboBox2Col::EndCombo();
     	}
     }
 
 	std::array transparentSortingValues { T("Per Triangle"), T("Per Strip"), T("Per Pixel"), };
 	const bool has_per_pixel = GraphicsContext::Instance()->hasPerPixel();
 	int renderer = perPixel ? 2 : config::PerStripSorting ? 1 : 0;
-    if (ComboBoxRow::BeginCombo(T("Transparent Sorting"), transparentSortingValues.at(renderer)))
+    if (ComboBox2Col::BeginCombo(T("Transparent Sorting"), transparentSortingValues.at(renderer)))
     {
-    	RadioButtonRow(T("Per Triangle"), &renderer, 0, T("Sort transparent polygons per triangle. Fast but may produce graphical glitches"));
-    	RadioButtonRow(T("Per Strip"), &renderer, 1, T("Sort transparent polygons per strip. Faster but may produce graphical glitches"));
+    	ComboBox2Col::Selectable(T("Per Triangle"), &renderer, 0, T("Sort transparent polygons per triangle. Fast but may produce graphical glitches"));
+    	ComboBox2Col::Selectable(T("Per Strip"), &renderer, 1, T("Sort transparent polygons per strip. Faster but may produce graphical glitches"));
 
         if (has_per_pixel)
         {
-        	RadioButtonRow(T("Per Pixel"), &renderer, 2, T("Sort transparent polygons per pixel. Slower but accurate"));
+        	ComboBox2Col::Selectable(T("Per Pixel"), &renderer, 2, T("Sort transparent polygons per pixel. Slower but accurate"));
         }
-		ComboBoxRow::EndCombo();
+		ComboBox2Col::EndCombo();
 
     	switch (renderer)
     	{

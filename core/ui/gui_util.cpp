@@ -568,17 +568,63 @@ void ComboBoxRow::EndCombo()
 	ImGui::EndPopup();
 }
 
-bool ComboBoxRow::Selectable(const char* label, bool* selected)
+bool ComboBoxRow::Selectable(const char* label, bool* selected, const ImVec2& size)
 {
 	ImGui::PushFont(settingsValueFont, uiLargeFontSize());
-	bool pressed = ImGui::Selectable(label, selected);
+	ImGui::PushStyleVarY(ImGuiStyleVar_SelectableTextAlign, 0.5f);
+	bool pressed = ImGui::Selectable(label, selected, ImGuiSelectableFlags_None, size);
+	ImGui::PopStyleVar();
 	ImGui::PopFont();
 	return pressed;
 }
 
-bool ComboBoxRow::Selectable(const char* label, bool selected)
+bool ComboBoxRow::Selectable(const char* label, bool selected, const ImVec2& size)
 {
-	return Selectable(label, &selected);
+	return Selectable(label, &selected, size);
+}
+
+bool ComboBox2Col::BeginCombo(const char *name, const char *value, const char *help)
+{
+	if (ComboBoxRow::BeginCombo(name, value, ImGuiComboFlags_None, help))
+	{
+		if (ImGui::BeginTable("table", 2))
+		{
+			// TODO2: fix
+			ImGui::PushStyleVarY(ImGuiStyleVar_CellPadding, 0);
+			return true;
+		}
+
+		ComboBoxRow::EndCombo();
+	}
+
+    return false;
+}
+
+void ComboBox2Col::EndCombo()
+{
+	ImGui::PopStyleVar();
+	ImGui::EndTable();
+	ComboBoxRow::EndCombo();
+}
+
+bool ComboBox2Col::Selectable(const char *label, int *v, int v_button, const char *help)
+{
+	ImGui::TableNextColumn();
+	ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0.0f);
+	bool pressed = ComboBoxRow::Selectable(label, *v == v_button, ImVec2(0, gui_RowHeight()));
+	ImGui::PopStyleVar();
+	if (pressed)
+	{
+		*v = v_button;
+	}
+
+	ImGui::TableNextColumn();
+	if (help != nullptr)
+	{
+		renderRowTooltip(help, gui_RowHeight());
+	}
+
+    return pressed;
 }
 
 template<bool PerGameOption>

@@ -69,11 +69,23 @@ bool OptionRadioButton(const char *name, config::Option<T>& option, T value, con
 class ComboBoxRow
 {
 public:
+	// TODO2: flags param should be deleted
 	static bool BeginCombo(const char* name, const char* value, ImGuiComboFlags flags = 0, const char* help = nullptr);
 	static void EndCombo();
 
-	static bool Selectable(const char* label, bool* selected);
-	static bool Selectable(const char* label, bool selected);
+	static bool Selectable(const char* label, bool* selected, const ImVec2& size = ImVec2(0, 0));
+	static bool Selectable(const char* label, bool selected, const ImVec2& size = ImVec2(0, 0));
+};
+
+// Similar to ComboBoxRow except the combo items are arranged in 2-column table layout.
+// This is roughly a replacement for radio button groups where the individual items have help text
+class ComboBox2Col
+{
+public:
+	static bool BeginCombo(const char* name, const char* value, const char* help = nullptr);
+	static void EndCombo();
+
+	static bool Selectable(const char* label, int* v, int v_button, const char* help = nullptr);
 };
 
 template<bool PerGameOption>
