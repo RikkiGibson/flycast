@@ -603,7 +603,7 @@ bool ComboBox2Col::BeginCombo(const char *name, const char *value, const char *h
 
 void ComboBox2Col::EndCombo()
 {
-	ImGui::PopStyleVar();
+	ImGui::PopStyleVar(); // ImGuiStyleVar_CellPadding
 	ImGui::EndTable();
 	ComboBoxRow::EndCombo();
 }
