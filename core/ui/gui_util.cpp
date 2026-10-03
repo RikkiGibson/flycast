@@ -589,7 +589,8 @@ bool ComboBox2Col::BeginCombo(const char *name, const char *value, const char *h
 	{
 		if (ImGui::BeginTable("table", 2))
 		{
-			// TODO2: fix
+			// Use 0 vertical cell padding, then 0 vertical item spacing on Selectables
+			// This prevents both gaps between rows, and overlap between Selectables
 			ImGui::PushStyleVarY(ImGuiStyleVar_CellPadding, 0);
 			return true;
 		}
@@ -611,8 +612,13 @@ bool ComboBox2Col::Selectable(const char *label, int *v, int v_button, const cha
 {
 	ImGui::TableNextColumn();
 	ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0.0f);
-	bool pressed = ComboBoxRow::Selectable(label, *v == v_button, ImVec2(0, gui_RowHeight()));
+	bool selected = *v == v_button;
+	bool pressed = ComboBoxRow::Selectable(label, selected, ImVec2(0, gui_RowHeight()));
 	ImGui::PopStyleVar();
+	if (selected)
+	{
+		ImGui::SetItemDefaultFocus();
+	}
 	if (pressed)
 	{
 		*v = v_button;
