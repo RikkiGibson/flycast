@@ -33,20 +33,19 @@
 static void gui_settings_advanced()
 {
 #if FEAT_SHREC != DYNAREC_NONE
-    header(T("CPU Mode"));
+	const char* cpuModeValue = config::DynarecEnabled ? T("Dynarec") : T("Interpreter");
+    if (ComboBoxRow::BeginCombo(T("CPU Mode"), cpuModeValue))
     {
-		ImGui::Columns(2, "cpu_modes", false);
 		OptionRadioButton(T("Dynarec"), config::DynarecEnabled, true,
 				T("Use the dynamic recompiler. Recommended in most cases"));
-		ImGui::NextColumn();
 		OptionRadioButton(T("Interpreter"), config::DynarecEnabled, false,
 				T("Use the interpreter. Very slow but may help in case of a dynarec problem"));
-		ImGui::Columns(1, nullptr, false);
+		ComboBoxRow::EndCombo();
+	}
 
-		OptionSlider(T("SH4 Clock"), config::Sh4Clock, 100, 300,
-				T("Over/Underclock the main SH4 CPU. Default is 200 MHz. Other values may crash, freeze or trigger unexpected nuclear reactions."),
-				"%d MHz");
-    }
+	OptionSlider(T("SH4 Clock"), config::Sh4Clock, 100, 300,
+			T("Over/Underclock the main SH4 CPU. Default is 200 MHz. Other values may crash, freeze or trigger unexpected nuclear reactions."),
+			"%d MHz");
 #ifdef GDB_SERVER
 	ImGui::Spacing();
 	header("Virtual memory addresses");
@@ -215,15 +214,9 @@ public:
 	bool BeginTabBar(const char* id)
 	{
 		ImGui::PushID(id);
-
-		// Setup tab bar structure: tab list on the left, active tab content on the right.
-		ImGui::BeginChild("##verticalTabBar", ScaledVec2(155, 0), ImGuiChildFlags_NavFlattened | ImGuiChildFlags_Borders);
-		ImGui::EndChild();
-		ImGui::SameLine();
-		ImGui::BeginChild("##activeTabContent", ImVec2(0, 0), ImGuiChildFlags_NavFlattened | ImGuiChildFlags_Borders, ImGuiWindowFlags_DragScrolling);
-		ImGui::EndChild();
-
-		bool ret = ImGui::BeginChild("##verticalTabBar");
+		// Tab bar structure: tab list on left, active tab content on the right.
+		// The right child is added when we encounter it in BeginTab().
+		bool ret = ImGui::BeginChild("##verticalTabBar", ScaledVec2(155, 0), ImGuiChildFlags_NavFlattened | ImGuiChildFlags_Borders);
 		if (!ret)
 			EndHelper();
 
@@ -260,7 +253,8 @@ public:
 
 		if (isActiveTab) {
 			ImGui::EndChild(); // ##verticalTabBar
-			ImGui::BeginChild("##activeTabContent", ImVec2(0, 0));
+			ImGui::SameLine();
+			ImGui::BeginChild(label, ImVec2(0, 0), ImGuiChildFlags_NavFlattened | ImGuiChildFlags_Borders, ImGuiWindowFlags_DragScrolling);
 		}
 
 		return isActiveTab;
@@ -270,7 +264,7 @@ public:
 	{
 		scrollWhenDraggingOnVoid();
 		windowDragScroll();
-		ImGui::EndChild(); // ##activeTabContent
+		ImGui::EndChild(); // 'label' (active tab)
 		ImGui::BeginChild("##verticalTabBar");
 	}
 };

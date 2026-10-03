@@ -311,13 +311,18 @@ float gui_RowHeight()
 	return uiScaled(40.0f);
 }
 
+float gui_RowMaxWidth()
+{
+	return uiScaled(400.0f);
+}
+
 float gui_SelectableWidth()
 {
-	const float rowMaxWidth = uiScaled(400.0f);
 	const float selectableWidth =
 		ImMax(0.0f,
-			ImMin(ImGui::GetContentRegionAvail().x, rowMaxWidth)
-				- (gui_RowHeight() + ImGui::GetStyle().ItemSpacing.x)
+			ImMin(ImGui::GetContentRegionAvail().x, gui_RowMaxWidth())
+				- gui_RowHeight()
+				- ImGui::GetStyle().ItemSpacing.x
 				- gui_indentDepth);
 	return selectableWidth;
 }
@@ -334,7 +339,7 @@ void renderRowSeparator()
     );
 }
 
-void renderRowTooltip(const char* help, float tooltipWrapPos, float rowHeight)
+void renderRowTooltip(const char* help, float rowHeight)
 {
 	verify(help != nullptr);
 
@@ -345,6 +350,11 @@ void renderRowTooltip(const char* help, float tooltipWrapPos, float rowHeight)
 	if (ImGui::BeginItemTooltip())
 	{
 		ImGui::PushFont(settingsTitleFont, 0.0f);
+
+		float tooltipWrapPos = ImMin(
+			ImGui::GetMainViewport()->Size.x,
+			gui_RowMaxWidth() - gui_RowHeight() - ImGui::GetStyle().ItemSpacing.x
+		);
 		ImGui::PushTextWrapPos(tooltipWrapPos);
 		ImGui::TextWrapped("%s", help); // Render 'help'
 		ImGui::PopTextWrapPos();
@@ -384,7 +394,7 @@ bool SliderIntRow(const char* name, int* v, int v_min, int v_max, const char* fo
 	if (help != nullptr)
 	{
 		ImGui::SameLine();
-		renderRowTooltip(help, selectableWidth, ImGui::GetFrameHeight());
+		renderRowTooltip(help, ImGui::GetFrameHeight());
 	}
 
 	ImGui::Spacing();
@@ -449,6 +459,18 @@ bool OptionArrowButtons(const char *name, config::Option<int>& option, int min, 
 	return valueChanged;
 }
 
+bool RadioButtonRow(const char *label, int *v, int v_button, const char* help)
+{
+	// TODO2: Rows flicker badly when used inside a popup.
+	bool pressed = renderSelectable(label, help, *v == v_button, [](ImRect) { });
+	if (pressed)
+	{
+		*v = v_button;
+	}
+
+	return pressed;
+}
+
 template<typename T>
 bool OptionRadioButton(const char *name, config::Option<T>& option, T value, const char *help)
 {
@@ -457,14 +479,9 @@ bool OptionRadioButton(const char *name, config::Option<T>& option, T value, con
 		DisabledScope scope(option.isReadOnly());
 
 		int v = (int)option;
-		pressed = ImGui::RadioButton(name, &v, (int)value);
+		pressed = RadioButtonRow(name, &v, (int)value, help);
 		if (pressed)
 			option.set((T)v);
-	}
-	if (help != nullptr)
-	{
-		ImGui::SameLine();
-		ShowHelpMarker(help);
 	}
 	return pressed;
 }
@@ -495,6 +512,11 @@ bool renderSelectable(const char* name, const char* help, bool selected, std::fu
 	ImGui::PushStyleVarY(ImGuiStyleVar_SelectableTextAlign, 0.5f);
 	// Render 'name' (in entire 'selectable' box)
 	bool pressed = ImGui::Selectable(name, selected, ImGuiSelectableFlags_None, ImVec2(selectableWidth, selectableHeight));
+	if (selected)
+	{
+		ImGui::SetItemDefaultFocus();
+	}
+
 	ImGui::PopStyleVar();
 	ImGui::PopFont();
 	ImVec2 finalScreenPos = ImGui::GetCursorScreenPos();
@@ -502,7 +524,7 @@ bool renderSelectable(const char* name, const char* help, bool selected, std::fu
 	if (help != nullptr)
 	{
 		ImGui::SameLine();
-		renderRowTooltip(help, selectableWidth, selectableHeight);
+		renderRowTooltip(help, selectableHeight);
 	}
 
 	renderValue(ImRect(initialScreenPos, ImVec2(finalScreenPos.x + selectableWidth, finalScreenPos.y)));
@@ -548,7 +570,7 @@ void ComboBoxRow::EndCombo()
 
 bool ComboBoxRow::Selectable(const char* label, bool* selected)
 {
-	ImGui::PushFont(settingsTitleFont, uiLargeFontSize());
+	ImGui::PushFont(settingsValueFont, uiLargeFontSize());
 	bool pressed = ImGui::Selectable(label, selected);
 	ImGui::PopFont();
 	return pressed;

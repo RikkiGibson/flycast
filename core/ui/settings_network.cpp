@@ -25,7 +25,6 @@
 void gui_settings_network()
 {
 	ImGuiStyle& style = ImGui::GetStyle();
-	header(T("Network Type"));
 	{
 		DisabledScope scope(game_started);
 
@@ -36,23 +35,16 @@ void gui_settings_network()
 			netType = 2;
 		else if (config::BattleCableEnable)
 			netType = 3;
-		ImGui::Columns(4, "networkType", false);
-		ImGui::RadioButton(T("Native"), &netType, 0);
-		ImGui::SameLine(0, style.ItemInnerSpacing.x);
-		ShowHelpMarker(T("Use native Dreamcast online features using the modem or Broadband Adapter"));
-		ImGui::NextColumn();
-		ImGui::RadioButton("GGPO", &netType, 1);
-		ImGui::SameLine(0, style.ItemInnerSpacing.x);
-		ShowHelpMarker(T("Enable networking using GGPO"));
-		ImGui::NextColumn();
-		ImGui::RadioButton("Naomi", &netType, 2);
-		ImGui::SameLine(0, style.ItemInnerSpacing.x);
-		ShowHelpMarker(T("Enable networking for supported Naomi and Atomiswave games"));
-		ImGui::NextColumn();
-		ImGui::RadioButton(T("Battle Cable"), &netType, 3);
-		ImGui::SameLine(0, style.ItemInnerSpacing.x);
-		ShowHelpMarker(T("Emulate the Taisen (Battle) null modem cable for games that support it"));
-		ImGui::Columns(1, nullptr, false);
+
+		std::array netTypeValues { T("Native"), "GGPO", "Naomi", T("Battle Cable"), };
+		if (ComboBoxRow::BeginCombo(T("Network Type"), netTypeValues.at(netType)))
+		{
+			RadioButtonRow(T("Native"), &netType, 0, T("Use native Dreamcast online features using the modem or Broadband Adapter"));
+			RadioButtonRow("GGPO", &netType, 1, T("Enable networking using GGPO"));
+			RadioButtonRow("Naomi", &netType, 2, T("Enable networking for supported Naomi and Atomiswave games"));
+			RadioButtonRow(T("Battle Cable"), &netType, 3, T("Emulate the Taisen (Battle) null modem cable for games that support it"));
+			ComboBoxRow::EndCombo();
+		}
 
 		config::GGPOEnable = false;
 		config::NetworkEnable = false;
@@ -112,23 +104,18 @@ void gui_settings_network()
 		else if (config::NetworkEnable)
 		{
 			// Naomi networking
-			ImGui::Text("%s", T("Network Role"));
 			int role = 0;
 			if (!config::ActAsServer)
 				role = config::NaomiSatellite ? 2 : 1;
-			ImGui::Columns(3, "networkRole", false);
-			ImGui::RadioButton(T("Master"), &role, 0);
-			ImGui::SameLine(0, style.ItemInnerSpacing.x);
-			ShowHelpMarker(T("Create a local server for Naomi network games"));
-			ImGui::NextColumn();
-			ImGui::RadioButton(T("Slave"), &role, 1);
-			ImGui::SameLine(0, style.ItemInnerSpacing.x);
-			ShowHelpMarker(T("Connect to the master server"));
-			ImGui::NextColumn();
-			ImGui::RadioButton(T("Satellite"), &role, 2);
-			ImGui::SameLine(0, style.ItemInnerSpacing.x);
-			ShowHelpMarker(T("Live monitor for games that support it (Virtual-On Oratorio Tangram and Club Kart)"));
-			ImGui::Columns(1, nullptr, false);
+
+			std::array networkRoleValues { T("Master"), T("Slave"), T("Satellite") };
+			if (ComboBoxRow::BeginCombo(T("Network Role"), networkRoleValues.at(role)))
+			{
+				RadioButtonRow(T("Master"), &role, 0, T("Create a local server for Naomi network games"));
+				RadioButtonRow(T("Slave"), &role, 1, T("Connect to the master server"));
+				RadioButtonRow(T("Satellite"), &role, 2, T("Live monitor for games that support it (Virtual-On Oratorio Tangram and Club Kart)"));
+				ComboBoxRow::EndCombo();
+			}
 
 			if (!config::ActAsServer)
 			{
@@ -260,7 +247,7 @@ void gui_settings_network()
 	header(T("Multiboard Screens"));
 	{
 		OptionRadioButton<int>(T("1 (Twin, Satellite)"), config::MultiboardSlaves, 1, T("One screen configuration (F355 Twin, Derby Owners Club satellite)"));
-		ImGui::SameLine();
+		ImGui::SameLine(); // TODO: line is breaking unexpectedly
 		OptionRadioButton<int>(T("2+ (Deluxe, Main screen)"), config::MultiboardSlaves, 2,
 				T("Two or three screens configuration (Airline Pilot, Derby Owners Club main screen, F355 Deluxe, Sega Strike Fighter)"));
 	}
