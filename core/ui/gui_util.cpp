@@ -320,6 +320,7 @@ float gui_SelectableWidth()
 {
 	// This helper depends on the container having a stable width.
 	// It should not be used inside containers which decide their width based on size of their children.
+	// (This check doesn't catch all such situations but works as a starting point)
 	verify(ImGui::GetCurrentContext()->BeginPopupStack.Size == 0);
 
 	const float selectableWidth =
@@ -329,6 +330,11 @@ float gui_SelectableWidth()
 				- ImGui::GetStyle().ItemSpacing.x
 				- gui_indentDepth);
 	return selectableWidth;
+}
+
+float uiSettingTitleFontSize()
+{
+	return uiScaled(20.0f);
 }
 
 void renderRowSeparator()
@@ -437,9 +443,8 @@ bool OptionArrowButtons(const char *name, config::Option<int>& option, int min, 
 	// │ name  value [<] [>] │ tooltip │
 	// │ separator           │         │
 	// └─────────────────────┘─────────┘
-
 	ImGui::Spacing();
-	ImGui::PushFont(regularFont, uiScaled(21.0f));
+	ImGui::PushFont(regularFont, uiSettingTitleFontSize());
 	ImGui::AlignTextToFramePadding();
 	ImGui::TextUnformatted(name); // Render 'name'
 
@@ -484,47 +489,7 @@ bool OptionArrowButtons(const char *name, config::Option<int>& option, int min, 
 
 	ImGui::Spacing();
 	renderRowSeparator();
-	ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0);
-	ImGui::Dummy(ImVec2(0, 0)); // Avoid 'ImGui::ErrorCheckUsingSetCursorPosToExtendParentBoundaries()' failure
-	ImGui::PopStyleVar();
 	ImGui::PopFont();
-
-	return valueChanged;
-}
-
-bool OptionArrowButtons0(const char *name, config::Option<int>& option, int min, int max, const char *help, const char *format)
-{
-	const float innerSpacing = ImGui::GetStyle().ItemInnerSpacing.x;
-	const std::string id = "##" + std::string(name);
-	{
-		ImguiStyleVar _(ImGuiStyleVar_ButtonTextAlign, ImVec2(0.f, 0.5f)); // Left
-		ImguiStyleColor _1(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_FrameBg]);
-		const float width = ImGui::CalcItemWidth() - innerSpacing * 2.0f - ImGui::GetFrameHeight() * 2.0f;
-		ImguiStyleVar _2(ImGuiStyleVar_DisabledAlpha, 1.0f);
-		ImGui::BeginDisabled();
-		std::string value = strprintf(format, (int)option);
-		ImGui::ButtonEx((value + id).c_str(), ImVec2(width, 0));
-		ImGui::EndDisabled();
-	}
-
-	ImGui::SameLine(0.0f, innerSpacing);
-	ImGui::PushButtonRepeat(true);
-	bool valueChanged = false;
-	{
-		DisabledScope scope(option.isReadOnly());
-
-		if (ImGui::ArrowButton((id + "left").c_str(), ImGuiDir_Left)) { option.set(std::max(min, option - 1)); valueChanged = true; }
-		ImGui::SameLine(0.0f, innerSpacing);
-		if (ImGui::ArrowButton((id + "right").c_str(), ImGuiDir_Right)) { option.set(std::min(max, option + 1)); valueChanged = true; }
-	}
-	ImGui::PopButtonRepeat();
-	ImGui::SameLine(0.0f, innerSpacing);
-	ImGui::Text("%s", name);
-	if (help != nullptr)
-	{
-		ImGui::SameLine();
-		ShowHelpMarker(help);
-	}
 	return valueChanged;
 }
 
@@ -548,7 +513,7 @@ bool renderSelectable(const char* name, const char* help, bool selected, std::fu
 	const float selectableHeight = gui_RowHeight();
 	const float selectableWidth = gui_SelectableWidth();
 
-	ImGui::PushFont(regularFont, uiScaled(20.0f));
+	ImGui::PushFont(regularFont, uiSettingTitleFontSize());
 	ImGui::PushStyleVarY(ImGuiStyleVar_SelectableTextAlign, 0.5f);
 	// Render 'name' (in entire 'selectable' box)
 	bool pressed = ImGui::Selectable(name, selected, ImGuiSelectableFlags_None, ImVec2(selectableWidth, selectableHeight));

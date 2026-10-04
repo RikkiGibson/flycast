@@ -338,8 +338,7 @@ void gui_settings_video()
             ComboBoxRow::EndCombo();
         }
 
-		std::array textureFilteringValues { T("Default"), T("Force Nearest-Neighbor"), T("Force Linear"),
-		};
+		std::array textureFilteringValues { T("Default"), T("Force Nearest-Neighbor"), T("Force Linear"), };
 		if (ComboBox2Col::BeginCombo(T("Texture Filtering:"), textureFilteringValues.at(config::TextureFiltering)))
 		{
     		ComboBox2Col::Selectable(T("Default"), config::TextureFiltering, 0, T("Use the game's default texture filtering"));

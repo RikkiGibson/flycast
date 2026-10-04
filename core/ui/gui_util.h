@@ -63,7 +63,6 @@ bool OptionSlider(const char *name, config::Option<int, PerGameOption>& option, 
 class ComboBoxRow
 {
 public:
-	// TODO2: flags param should be deleted
 	static bool BeginCombo(const char* name, const char* value, const char* help = nullptr);
 	static void EndCombo();
 
