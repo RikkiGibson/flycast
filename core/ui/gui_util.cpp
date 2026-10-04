@@ -321,7 +321,7 @@ float gui_SelectableWidth()
 	// This helper depends on the container having a stable width.
 	// It should not be used inside containers which decide their width based on size of their children.
 	// (This check doesn't catch all such situations but works as a starting point)
-	verify(ImGui::GetCurrentContext()->BeginPopupStack.Size == 0);
+	verify((ImGui::GetCurrentWindowRead()->Flags & ImGuiWindowFlags_AlwaysAutoResize) == 0);
 
 	const float selectableWidth =
 		ImMax(0.0f,
