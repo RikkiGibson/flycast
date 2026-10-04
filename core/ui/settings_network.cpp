@@ -77,8 +77,12 @@ void gui_settings_network()
 			OptionSlider(T("Frame Delay"), config::GGPODelay, 0, 20,
 					T("Sets Frame Delay, advisable for sessions with ping >100 ms"));
 
-			std::array leftThumbstickValues { T("Disabled"), T("Horizontal"), T("Full") };
-			if (ComboBox2Col::BeginCombo(T("Left Thumbstick:"), leftThumbstickValues.at(config::GGPOAnalogAxes)))
+			const char* preview =
+				config::GGPOAnalogAxes == 0 ? T("Disabled")
+				: config::GGPOAnalogAxes == 1 ? T("Horizontal")
+				: config::GGPOAnalogAxes == 2 ? T("Full")
+				: "";
+			if (ComboBox2Col::BeginCombo(T("Left Thumbstick:"), preview))
 			{
 				ComboBox2Col::Selectable((Ts("Disabled") + "##analogaxis").c_str(), config::GGPOAnalogAxes, 0, T("Left thumbstick not used"));
 				ComboBox2Col::Selectable(T("Horizontal"), config::GGPOAnalogAxes, 1, T("Use the left thumbstick horizontal axis only"));
@@ -247,8 +251,11 @@ void gui_settings_network()
 #ifdef NAOMI_MULTIBOARD
 	ImGui::Spacing();
 
-	std::array multiboardValues { T("1 (Twin, Satellite)"), T("2+ (Deluxe, Main screen)") };
-	if (ComboBox2Col::BeginCombo(T("Multiboard Screens"), multiboardValues.at(config::MultiboardSlaves - 1)))
+	const char* preview =
+		config::MultiboardSlaves == 1 ? T("1 (Twin, Satellite)")
+		: config::MultiboardSlaves == 2 ? T("2+ (Deluxe, Main screen)")
+		: "";
+	if (ComboBox2Col::BeginCombo(T("Multiboard Screens"), preview))
 	{
 		ComboBox2Col::Selectable(T("1 (Twin, Satellite)"), config::MultiboardSlaves, 1, T("One screen configuration (F355 Twin, Derby Owners Club satellite)"));
 		ComboBox2Col::Selectable(T("2+ (Deluxe, Main screen)"), config::MultiboardSlaves, 2,
