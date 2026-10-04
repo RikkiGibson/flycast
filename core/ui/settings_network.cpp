@@ -36,8 +36,8 @@ void gui_settings_network()
 		else if (config::BattleCableEnable)
 			netType = 3;
 
-		std::array netTypeValues { T("Native"), "GGPO", "Naomi", T("Battle Cable"), };
-		if (ComboBox2Col::BeginCombo(T("Network Type"), netTypeValues.at(netType)))
+		const char* preview = ComboBox2Col::Preview(netType, { T("Native"), "GGPO", "Naomi", T("Battle Cable") });
+		if (ComboBox2Col::BeginCombo(T("Network Type"), preview))
 		{
 			ComboBox2Col::Selectable(T("Native"), &netType, 0, T("Use native Dreamcast online features using the modem or Broadband Adapter"));
 			ComboBox2Col::Selectable("GGPO", &netType, 1, T("Enable networking using GGPO"));
@@ -77,11 +77,7 @@ void gui_settings_network()
 			OptionSlider(T("Frame Delay"), config::GGPODelay, 0, 20,
 					T("Sets Frame Delay, advisable for sessions with ping >100 ms"));
 
-			const char* preview =
-				config::GGPOAnalogAxes == 0 ? T("Disabled")
-				: config::GGPOAnalogAxes == 1 ? T("Horizontal")
-				: config::GGPOAnalogAxes == 2 ? T("Full")
-				: "";
+			const char* preview = ComboBox2Col::Preview(config::GGPOAnalogAxes, { T("Disabled"), T("Horizontal"), T("Full") });
 			if (ComboBox2Col::BeginCombo(T("Left Thumbstick:"), preview))
 			{
 				ComboBox2Col::Selectable((Ts("Disabled") + "##analogaxis").c_str(), config::GGPOAnalogAxes, 0, T("Left thumbstick not used"));
@@ -114,8 +110,8 @@ void gui_settings_network()
 			if (!config::ActAsServer)
 				role = config::NaomiSatellite ? 2 : 1;
 
-			std::array networkRoleValues { T("Master"), T("Slave"), T("Satellite") };
-			if (ComboBox2Col::BeginCombo(T("Network Role"), networkRoleValues.at(role)))
+			const char* preview = ComboBox2Col::Preview(role, { T("Master"), T("Slave"), T("Satellite") });
+			if (ComboBox2Col::BeginCombo(T("Network Role"), preview))
 			{
 				ComboBox2Col::Selectable(T("Master"), &role, 0, T("Create a local server for Naomi network games"));
 				ComboBox2Col::Selectable(T("Slave"), &role, 1, T("Connect to the master server"));
@@ -251,10 +247,7 @@ void gui_settings_network()
 #ifdef NAOMI_MULTIBOARD
 	ImGui::Spacing();
 
-	const char* preview =
-		config::MultiboardSlaves == 1 ? T("1 (Twin, Satellite)")
-		: config::MultiboardSlaves == 2 ? T("2+ (Deluxe, Main screen)")
-		: "";
+	const char* preview = ComboBox2Col::Preview(config::MultiboardSlaves - 1, { T("1 (Twin, Satellite)"), T("2+ (Deluxe, Main screen)") });
 	if (ComboBox2Col::BeginCombo(T("Multiboard Screens"), preview))
 	{
 		ComboBox2Col::Selectable(T("1 (Twin, Satellite)"), config::MultiboardSlaves, 1, T("One screen configuration (F355 Twin, Derby Owners Club satellite)"));

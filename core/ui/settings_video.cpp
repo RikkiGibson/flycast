@@ -82,7 +82,7 @@ void gui_settings_video()
     float innerSpacing = ImGui::GetStyle().ItemInnerSpacing.x;
 	if (apiCount > 1)
 	{
-		constexpr std::array renderApiValues
+		const char* preview = ComboBox2Col::Preview(renderApi,
 		{
 			"OpenGL",
 #ifdef __APPLE__
@@ -92,8 +92,8 @@ void gui_settings_video()
 #endif
 			"DirectX 9",
 			"DirectX 11",
-		};
-		if (ComboBox2Col::BeginCombo(T("Graphics API"), renderApiValues.at(renderApi)))
+		});
+		if (ComboBox2Col::BeginCombo(T("Graphics API"), preview))
 		{
 #ifdef USE_OPENGL
 			ComboBox2Col::Selectable<int>("OpenGL", &renderApi, OpenGL);
@@ -118,10 +118,10 @@ void gui_settings_video()
     	}
     }
 
-	std::array transparentSortingValues { T("Per Triangle"), T("Per Strip"), T("Per Pixel"), };
 	const bool has_per_pixel = GraphicsContext::Instance()->hasPerPixel();
 	int renderer = perPixel ? 2 : config::PerStripSorting ? 1 : 0;
-    if (ComboBox2Col::BeginCombo(T("Transparent Sorting"), transparentSortingValues.at(renderer)))
+	const char* preview = ComboBox2Col::Preview(renderer, { T("Per Triangle"), T("Per Strip"), T("Per Pixel") });
+    if (ComboBox2Col::BeginCombo(T("Transparent Sorting"), preview))
     {
     	ComboBox2Col::Selectable(T("Per Triangle"), &renderer, 0, T("Sort transparent polygons per triangle. Fast but may produce graphical glitches"));
     	ComboBox2Col::Selectable(T("Per Strip"), &renderer, 1, T("Sort transparent polygons per strip. Faster but may produce graphical glitches"));
@@ -211,8 +211,8 @@ void gui_settings_video()
 			int selectedMode = configuredMode;
 			{
 				DisabledScope readOnlyScope(config::PreloadCustomTextures.isReadOnly());
-				std::array customTexturePreloadingValues { T("Off"), T("System Memory"), T("Video Memory"), };
-				if (ComboBox2Col::BeginCombo(T("Custom Texture Preloading"), customTexturePreloadingValues.at(selectedMode)))
+				const char* preview = ComboBox2Col::Preview(selectedMode, { T("Off"), T("System Memory"), T("Video Memory") });
+				if (ComboBox2Col::BeginCombo(T("Custom Texture Preloading"), preview))
 				{
 					ComboBox2Col::Selectable(T("Off"), &selectedMode,
 							static_cast<int>(config::CustomTexturePreloadMode::Off),
@@ -289,8 +289,8 @@ void gui_settings_video()
 	ImGui::Spacing();
     header(T("Performance"));
     {
-		std::array autoskipValues { T("Disabled"), T("Normal"), T("Maximum"), };
-		if (ComboBox2Col::BeginCombo(T("Automatic Frame Skipping:"), autoskipValues.at(config::AutoSkipFrame)))
+		const char* preview = ComboBox2Col::Preview(config::AutoSkipFrame, { T("Disabled"), T("Normal"), T("Maximum") });
+		if (ComboBox2Col::BeginCombo(T("Automatic Frame Skipping:"), preview))
 		{
 			ComboBox2Col::Selectable(T("Disabled"), config::AutoSkipFrame, 0, T("No frame skipping"));
 			ComboBox2Col::Selectable(T("Normal"), config::AutoSkipFrame, 1, T("Skip a frame when the GPU and CPU are both running slow"));
@@ -338,8 +338,8 @@ void gui_settings_video()
             ComboBoxRow::EndCombo();
         }
 
-		std::array textureFilteringValues { T("Default"), T("Force Nearest-Neighbor"), T("Force Linear"), };
-		if (ComboBox2Col::BeginCombo(T("Texture Filtering:"), textureFilteringValues.at(config::TextureFiltering)))
+		const char* preview = ComboBox2Col::Preview(config::TextureFiltering, { T("Default"), T("Force Nearest-Neighbor"), T("Force Linear") });
+		if (ComboBox2Col::BeginCombo(T("Texture Filtering:"), preview))
 		{
     		ComboBox2Col::Selectable(T("Default"), config::TextureFiltering, 0, T("Use the game's default texture filtering"));
     		ComboBox2Col::Selectable(T("Force Nearest-Neighbor"), config::TextureFiltering, 1, T("Force nearest-neighbor filtering for all textures. Crisper appearance, but may cause various rendering issues. This option usually does not affect performance."));

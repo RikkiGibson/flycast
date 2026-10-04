@@ -31,6 +31,7 @@
 #include <algorithm>
 #include <chrono>
 #include <future>
+#include <initializer_list>
 #include <string>
 #include <mutex>
 
@@ -75,6 +76,7 @@ public:
 class ComboBox2Col
 {
 public:
+	static const char* Preview(int selected, std::initializer_list<const char*> values);
 	static bool BeginCombo(const char* name, const char* value, const char* help = nullptr);
 	static void EndCombo();
 

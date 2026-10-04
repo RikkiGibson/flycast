@@ -581,6 +581,12 @@ bool ComboBoxRow::Selectable(const char* label, bool selected, const ImVec2& siz
 	return Selectable(label, &selected, size);
 }
 
+const char* ComboBox2Col::Preview(int selected, std::initializer_list<const char*> values)
+{
+	auto index = static_cast<size_t>(selected);
+	return index < values.size() ? values.begin()[index] : "";
+}
+
 bool ComboBox2Col::BeginCombo(const char *name, const char *value, const char *help)
 {
 	if (ComboBoxRow::BeginCombo(name, value, help))
