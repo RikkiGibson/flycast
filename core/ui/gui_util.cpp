@@ -454,7 +454,7 @@ bool OptionArrowButtons(const char *name, config::Option<int>& option, int min, 
 
 	// 'value' uses slightly larger font size than other items in 'selectable'
 	ImGui::PushFont(settingsValueFont, uiLargeFontSize());
-	std::string valueText = std::to_string(option.get());
+	std::string valueText = strprintf(format, option.get());
 	float helpOffset = gui_SelectableWidth() + ImGui::GetStyle().ItemSpacing.x * 2; // 2 spacings: _|_tooltip
 	float valueOffset = helpOffset - ImGui::CalcTextSize(valueText.c_str()).x - buttonsAndSpacingWidth;
 	ImGui::SameLine(valueOffset);
@@ -610,6 +610,8 @@ void ComboBox2Col::EndCombo()
 template<typename T>
 bool ComboBox2Col::Selectable(const char *label, T *v, T v_button, const char *help)
 {
+	ImguiID id(label);
+
 	ImGui::TableNextColumn();
 	ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0.0f);
 	bool selected = *v == v_button;
@@ -640,6 +642,7 @@ template bool ComboBox2Col::Selectable<bool>(const char *label, bool *v, bool v_
 template<typename T, bool PerGameOption>
 bool ComboBox2Col::Selectable(const char *label, config::Option<T, PerGameOption>& option, T value, const char *help)
 {
+	DisabledScope scope(option.isReadOnly());
 	return Selectable(label, &option.get(), value, help);
 }
 
