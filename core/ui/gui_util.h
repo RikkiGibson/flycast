@@ -45,9 +45,6 @@ void scrollWhenDraggingOnVoid(ImGuiMouseButton mouse_button = ImGuiMouseButton_L
 // Helper to display a little (?) mark which shows a tooltip when hovered.
 void ShowHelpMarker(const char* desc);
 
-void gui_Indent(float depth = 0.0f);
-void gui_Unindent(float depth = 0.0f);
-
 // Renders a checkbox with optional help text as a single row.
 bool CheckboxRow(const char* name, bool* value, const char* help = nullptr);
 
@@ -97,6 +94,25 @@ static inline void centerNextWindow()
 	ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x / 2.f, ImGui::GetIO().DisplaySize.y / 2.f),
 			ImGuiCond_Always, ImVec2(0.5f, 0.5f));
 }
+class FolderList
+{
+public:
+	static void BeginHeader(const char* name);
+	static void EndHeader();
+	// Get the x offset to pass to SameLine in order to render n buttons on the line.
+	static float ButtonSpacing(int nButtons);
+
+	static bool ButtonAdd();
+	static bool ButtonRescan();
+
+	static void Tooltip(const char* help);
+
+	static void BeginFolderList();
+	static bool Folder(const char* path);
+	static bool ButtonDelete();
+
+	static void EndFolderList();
+};
 
 void fullScreenWindow(bool modal);
 void windowDragScroll();
@@ -367,7 +383,7 @@ private:
 	std::mutex mutex;
 };
 
-std::string middleEllipsis(const std::string& s, float width);
+std::string middleEllipsis(std::string s, float width);
 
 bool beginFrame(const char *label, const ImVec2& size_arg = ImVec2(0, 0), ImVec2 *out_size = nullptr);
 void endFrame();
