@@ -300,9 +300,10 @@ float gui_RowMaxWidth()
 
 float gui_SelectableWidth()
 {
-	// This helper depends on the container having a stable width.
-	// It should not be used inside containers which decide their width based on size of their children.
-	// (This check doesn't catch all such situations but works as a starting point)
+	// Preconditions:
+	// - Should be called at the start of the row, otherwise indentation can't be detected accurately
+	// - Should not be called in a container which decides its width based on width of its children (e.g. popup)
+	//   (This check doesn't catch all such situations but works as a starting point)
 	verify((ImGui::GetCurrentWindowRead()->Flags & ImGuiWindowFlags_AlwaysAutoResize) == 0);
 
 	// Calculate a width such that values and tooltips are aligned even for indented rows.
@@ -353,7 +354,7 @@ void renderRowTooltip(const char* help, float rowHeight)
 	ImGui::InvisibleButton("##tooltip", ImVec2(tooltipSize, tooltipSize));
 	if (ImGui::BeginItemTooltip())
 	{
-		ImGui::PushFont(settingsTitleFont, uiScaled(17.0f));
+		ImGui::PushFont(settingsTitleFont, uiNormalFontSize());
 
 		float tooltipWrapPos = ImMin(
 			ImGui::GetMainViewport()->Size.x,
@@ -681,74 +682,84 @@ void OptionComboBox(const char *name, config::Option<int, PerGameOption>& option
 template void OptionComboBox<true>(const char *name, config::Option<int, true>& option, const char *values[], int count, const char *help);
 template void OptionComboBox<false>(const char *name, config::Option<int, false>& option, const char *values[], int count, const char *help);
 
-void FolderList::BeginHeader(const char *name)
+void FolderList::Header(const char* name, const char* help, bool& outAdd, bool& outRefresh)
 {
+	ImGui::PushID(name);
+	float selectableWidth = gui_SelectableWidth();
+
 	ImGui::PushFont(regularFont, uiSettingTitleFontSize());
 	ImGui::Spacing();
 	ImGui::AlignTextToFramePadding();
 	ImGui::TextUnformatted(name);
 	ImGui::PopFont();
-}
 
-void FolderList::EndHeader()
-{
-	ImGui::PushFont(regularFont, uiSettingTitleFontSize());
+	ImGui::PushFont(nullptr, uiLargeFontSize());
+	float buttonsWidth = ImGui::CalcTextSize(ICON_FA_FOLDER_PLUS).x
+		+ ImGui::CalcTextSize(ICON_FA_ARROWS_ROTATE).x
+		+ ImGui::GetStyle().FramePadding.x * 4;
+
+	ImGui::SameLine(selectableWidth - buttonsWidth);
+	outAdd = ImGui::Button(ICON_FA_FOLDER_PLUS);
+	ImGui::PushFont(settingsTitleFont, uiNormalFontSize());
+	ImGui::SetItemTooltip("%s", T("Add"));
+	ImGui::PopFont();
+
+	ImGui::SameLine();
+	outRefresh = ImGui::Button(ICON_FA_ARROWS_ROTATE);
+	ImGui::PushFont(settingsTitleFont, uiNormalFontSize());
+	ImGui::SetItemTooltip("%s", T("Rescan Content"));
+	ImGui::PopFont();
+	ImGui::PopFont();
+
+	if (help != nullptr)
+	{
+		ImGui::SameLine(selectableWidth + ImGui::GetStyle().ItemSpacing.x * 2);
+		renderRowTooltip(help, ImGui::GetFrameHeight());
+	}
+
 	ImGui::Spacing();
+	// TODO2: gui_SelectableWidth is *still* buggy with indentation
+	// ImGui::Indent();
+}
+
+void FolderList::Entry(const char *path, bool &outOpen, bool &outDelete)
+{
+	float selectableWidth = gui_SelectableWidth();
+
+	ImGui::PushFont(regularFont, uiLargeFontSize());
+	float buttonsWidth = ImGui::CalcTextSize(ICON_FA_FOLDER_OPEN).x
+		+ ImGui::CalcTextSize(ICON_FA_TRASH_CAN).x
+		+ ImGui::GetStyle().FramePadding.x * 4;
+
+	float textMaxWidth = selectableWidth - buttonsWidth;
+	ImGui::PushFont(settingsTitleFont, uiNormalFontSize());
+	ImGui::AlignTextToFramePadding();
+	std::string pathEllipsis = middleEllipsis(std::string(path), textMaxWidth);
+	ImGui::TextUnformatted(pathEllipsis.c_str());
+	ImGui::SetItemTooltip("%s", path);
 	ImGui::PopFont();
-	renderRowSeparator();
-}
 
-float FolderList::ButtonSpacing(int nButtons)
-{
-	ImGui::PushFont(settingsValueFont, uiLargeFontSize());
-	float spacing = ImGui::GetFrameHeight() * nButtons
-		+ ImGui::GetStyle().ItemSpacing.x * (nButtons + 1);
+	ImGui::SameLine(selectableWidth - buttonsWidth);
+	outOpen = ImGui::Button(ICON_FA_FOLDER_OPEN);
+	ImGui::PushFont(settingsTitleFont, uiNormalFontSize());
+	ImGui::SetItemTooltip("%s", T("Reveal in Finder"));
 	ImGui::PopFont();
 
-	return gui_SelectableWidth() - spacing;
-}
-
-bool FolderList::ButtonAdd()
-{
-	ImGui::PushFont(settingsValueFont, uiLargeFontSize());
-	bool pressed = ImGui::Button((std::string(ICON_FA_FOLDER_PLUS) + " " + T("Add")).c_str());
+	ImGui::SameLine();
+	outDelete = ImGui::Button(ICON_FA_TRASH_CAN);
+	ImGui::PushFont(settingsTitleFont, uiNormalFontSize());
+	ImGui::SetItemTooltip("%s", T("Remove"));
 	ImGui::PopFont();
-    return pressed;
-}
 
-bool FolderList::ButtonRescan()
-{
-	ImGui::PushFont(settingsValueFont, uiLargeFontSize());
-	bool pressed = ImGui::Button((std::string(ICON_FA_ARROWS_ROTATE) + " " + T("Rescan Content")).c_str());
-	ImGui::PopFont();
-    return false;
-}
-
-void FolderList::Tooltip(const char *help)
-{
-	ImGui::PushFont(settingsValueFont, uiSettingTitleFontSize());
-	renderRowTooltip(help, ImGui::GetFrameHeight());
 	ImGui::PopFont();
 }
 
-void FolderList::BeginFolderList()
+void FolderList::End()
 {
-}
-
-bool FolderList::Folder(const char *path)
-{
-    return false;
-}
-
-bool FolderList::ButtonDelete()
-{
-    return false;
-}
-
-void FolderList::EndFolderList()
-{
+	// ImGui::Unindent(); // TODO2
 	ImGui::Spacing();
 	renderRowSeparator();
+	ImGui::PopID(); // name
 }
 
 void fullScreenWindow(bool modal)

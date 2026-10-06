@@ -181,6 +181,7 @@ void addContentPath(bool start)
 }
 
 void gui_ManageFolders();
+void gui_ManageFolders0();
 void gui_Appearance();
 void gui_Misc();
 void gui_Achievements();
@@ -274,6 +275,7 @@ void gui_settings_general()
 	}
 
 	gui_ManageFolders();
+	gui_ManageFolders0();
 	gui_Appearance();
 	gui_Misc();
 	gui_Achievements();
@@ -282,23 +284,44 @@ void gui_settings_general()
 
 void gui_ManageFolders()
 {
-	// TODO2: probably try deabstracting first, and getting the appearance right
-	FolderList::BeginHeader(T("Content Location"));
+	bool addPressed, refreshPressed;
+	FolderList::Header(T("Content Location"), T("The folders where your games are stored"), addPressed, refreshPressed);
 
-	ImGui::SameLine(FolderList::ButtonSpacing(2));
-	if (FolderList::ButtonAdd())
+	addContentPath(addPressed);
+	if (refreshPressed)
 	{
+		scanner.refresh();
 	}
 
-	ImGui::SameLine();
-	if (FolderList::ButtonRescan())
+	auto& contentPaths = config::ContentPath.get();
+	auto toDelete = contentPaths.end();
+	for (auto it = contentPaths.begin(); it != contentPaths.end(); ++it)
 	{
+		ImguiID id(it - contentPaths.begin());
+		bool openPressed, deletePressed;
+        FolderList::Entry(it->c_str(), openPressed, deletePressed);
+		if (openPressed)
+		{
+			// TODO2: cross-plat Open helper. SDL_OpenURL, something for Android, ...
+            char temp[512];
+            snprintf(temp, sizeof(temp), "open \"%s\"", it->c_str());
+            system(temp);
+		}
+
+		if (deletePressed)
+		{
+			toDelete = it;
+		}
 	}
 
-	ImGui::SameLine();
-	FolderList::Tooltip(T("The folders where your games are stored"));
+	if (toDelete != contentPaths.end())
+	{
+		scanner.stop();
+		contentPaths.erase(toDelete);
+		scanner.refresh();
+	}
 
-	FolderList::EndFolderList();
+	FolderList::End();
 }
 
 void gui_ManageFolders0()

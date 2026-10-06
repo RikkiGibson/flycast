@@ -97,21 +97,9 @@ static inline void centerNextWindow()
 class FolderList
 {
 public:
-	static void BeginHeader(const char* name);
-	static void EndHeader();
-	// Get the x offset to pass to SameLine in order to render n buttons on the line.
-	static float ButtonSpacing(int nButtons);
-
-	static bool ButtonAdd();
-	static bool ButtonRescan();
-
-	static void Tooltip(const char* help);
-
-	static void BeginFolderList();
-	static bool Folder(const char* path);
-	static bool ButtonDelete();
-
-	static void EndFolderList();
+	static void Header(const char* name, const char* help, bool& outAdd, bool& outRefresh);
+	static void Entry(const char* path, bool& outOpen, bool& outDelete);
+	static void End();
 };
 
 void fullScreenWindow(bool modal);
@@ -168,6 +156,11 @@ static inline float uiScaled(float f) {
 	return f * settings.display.uiScale;
 }
 
+static inline float uiNormalFontSize()
+{
+	return uiScaled(17.0f);
+}
+
 static inline float uiLargeFontSize()
 {
 	return uiScaled(22.f);
@@ -218,6 +211,9 @@ public:
 	ImguiID(const std::string& id)
 		: ImguiID(id.c_str()) {}
 	ImguiID(const char *id) {
+		ImGui::PushID(id);
+	}
+	ImguiID(int id) {
 		ImGui::PushID(id);
 	}
 	~ImguiID() {
