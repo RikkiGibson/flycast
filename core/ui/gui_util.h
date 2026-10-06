@@ -31,6 +31,7 @@
 #include <algorithm>
 #include <chrono>
 #include <future>
+#include <initializer_list>
 #include <string>
 #include <mutex>
 
@@ -58,18 +59,32 @@ bool SliderIntRow(const char* name, int* v, int v_min, int v_max, const char* fo
 
 template<bool PerGameOption>
 bool OptionSlider(const char *name, config::Option<int, PerGameOption>& option, int min, int max, const char *help = nullptr, const char *format = nullptr);
-template<typename T>
-bool OptionRadioButton(const char *name, config::Option<T>& option, T value, const char *help = nullptr);
 
 // Renders a combo box with optional help text as a single row.
 class ComboBoxRow
 {
 public:
-	static bool BeginCombo(const char* name, const char* value, ImGuiComboFlags flags = 0, const char* help = nullptr);
+	static bool BeginCombo(const char* name, const char* value, const char* help = nullptr);
 	static void EndCombo();
 
-	static bool Selectable(const char* label, bool* selected);
-	static bool Selectable(const char* label, bool selected);
+	static bool Selectable(const char* label, bool* selected, const ImVec2& size = ImVec2(0, 0));
+	static bool Selectable(const char* label, bool selected, const ImVec2& size = ImVec2(0, 0));
+};
+
+// Similar to ComboBoxRow except the combo items are arranged in 2-column table layout.
+// This is roughly a replacement for radio button groups where the individual items have help text
+class ComboBox2Col
+{
+public:
+	static const char* Preview(int selected, std::initializer_list<const char*> values);
+	static bool BeginCombo(const char* name, const char* value, const char* help = nullptr);
+	static void EndCombo();
+
+	template<typename T>
+	static bool Selectable(const char* label, T* v, T v_button, const char* help = nullptr);
+
+	template<typename T, bool PerGameOption>
+	static bool Selectable(const char *label, config::Option<T, PerGameOption>& option, T value, const char *help = nullptr);
 };
 
 template<bool PerGameOption>

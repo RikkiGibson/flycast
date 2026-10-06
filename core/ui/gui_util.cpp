@@ -248,7 +248,7 @@ void gui_Indent(float depth)
 	float xBefore = ImGui::GetCursorScreenPos().x;
 	ImGui::Indent(depth);
 	float xAfter = ImGui::GetCursorScreenPos().x;
-	gui_indentDepth += xAfter - xBefore;
+	gui_indentDepth += depth != 0.0f ? depth : ImGui::GetStyle().IndentSpacing;
 }
 
 void gui_Unindent(float depth)
@@ -256,7 +256,7 @@ void gui_Unindent(float depth)
 	float xBefore = ImGui::GetCursorScreenPos().x;
 	ImGui::Unindent(depth);
 	float xAfter = ImGui::GetCursorScreenPos().x;
-	gui_indentDepth += xAfter - xBefore;
+	gui_indentDepth -= depth != 0.0f ? depth : ImGui::GetStyle().IndentSpacing;
 }
 
 float gui_centerIn(float containerSize, float itemSize)
@@ -311,15 +311,32 @@ float gui_RowHeight()
 	return uiScaled(40.0f);
 }
 
+float gui_RowMaxWidth()
+{
+	return uiScaled(400.0f);
+}
+
 float gui_SelectableWidth()
 {
-	const float rowMaxWidth = uiScaled(400.0f);
+	// This helper depends on the container having a stable width.
+	// It should not be used inside containers which decide their width based on size of their children.
+	// (This check doesn't catch all such situations but works as a starting point)
+	verify((ImGui::GetCurrentWindowRead()->Flags & ImGuiWindowFlags_AlwaysAutoResize) == 0);
+
 	const float selectableWidth =
 		ImMax(0.0f,
-			ImMin(ImGui::GetContentRegionAvail().x, rowMaxWidth)
-				- (gui_RowHeight() + ImGui::GetStyle().ItemSpacing.x)
+			ImMin(ImGui::GetContentRegionAvail().x, gui_RowMaxWidth())
+				- gui_RowHeight()
+				- ImGui::GetStyle().ItemSpacing.x
+				// Note: this is based on a simplistic helper which doesn't account for e.g. child windows.
+				// If this starts failing to scale to new use sites, we may want to invest in replacing this with a SetNextItemWidth()...CalcItemWidth()... based solution.
 				- gui_indentDepth);
 	return selectableWidth;
+}
+
+float uiSettingTitleFontSize()
+{
+	return uiScaled(20.0f);
 }
 
 void renderRowSeparator()
@@ -334,7 +351,7 @@ void renderRowSeparator()
     );
 }
 
-void renderRowTooltip(const char* help, float tooltipWrapPos, float rowHeight)
+void renderRowTooltip(const char* help, float rowHeight)
 {
 	verify(help != nullptr);
 
@@ -344,7 +361,12 @@ void renderRowTooltip(const char* help, float tooltipWrapPos, float rowHeight)
 	ImGui::InvisibleButton("##tooltip", ImVec2(tooltipSize, tooltipSize));
 	if (ImGui::BeginItemTooltip())
 	{
-		ImGui::PushFont(settingsTitleFont, 0.0f);
+		ImGui::PushFont(settingsTitleFont, uiScaled(17.0f));
+
+		float tooltipWrapPos = ImMin(
+			ImGui::GetMainViewport()->Size.x,
+			gui_RowMaxWidth() - gui_RowHeight() - ImGui::GetStyle().ItemSpacing.x
+		);
 		ImGui::PushTextWrapPos(tooltipWrapPos);
 		ImGui::TextWrapped("%s", help); // Render 'help'
 		ImGui::PopTextWrapPos();
@@ -355,6 +377,7 @@ void renderRowTooltip(const char* help, float tooltipWrapPos, float rowHeight)
 	ImGui::PushFont(nullptr, uiScaled(21.0f));
 	ImVec2 tooltipTextSize = ImGui::CalcTextSize(ICON_FA_CIRCLE_INFO);
 	ImGui::SetCursorScreenPos(tooltipPos + gui_centerIn(ImVec2(tooltipSize, tooltipSize), tooltipTextSize));
+	ImGui::AlignTextToFramePadding();
 	ImGui::TextDisabled(ICON_FA_CIRCLE_INFO); // Render 'tooltip'
 	ImGui::PopFont();
 }
@@ -384,7 +407,7 @@ bool SliderIntRow(const char* name, int* v, int v_min, int v_max, const char* fo
 	if (help != nullptr)
 	{
 		ImGui::SameLine();
-		renderRowTooltip(help, selectableWidth, ImGui::GetFrameHeight());
+		renderRowTooltip(help, ImGui::GetFrameHeight());
 	}
 
 	ImGui::Spacing();
@@ -415,61 +438,63 @@ template bool OptionSlider(const char *name, config::Option<int, false>& option,
 
 bool OptionArrowButtons(const char *name, config::Option<int>& option, int min, int max, const char *help, const char *format)
 {
-	const float innerSpacing = ImGui::GetStyle().ItemInnerSpacing.x;
-	const std::string id = "##" + std::string(name);
-	{
-		ImguiStyleVar _(ImGuiStyleVar_ButtonTextAlign, ImVec2(0.f, 0.5f)); // Left
-		ImguiStyleColor _1(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_FrameBg]);
-		const float width = ImGui::CalcItemWidth() - innerSpacing * 2.0f - ImGui::GetFrameHeight() * 2.0f;
-		ImguiStyleVar _2(ImGuiStyleVar_DisabledAlpha, 1.0f);
-		ImGui::BeginDisabled();
-		std::string value = strprintf(format, (int)option);
-		ImGui::ButtonEx((value + id).c_str(), ImVec2(width, 0));
-		ImGui::EndDisabled();
-	}
+	ImguiID id(name);
 
-	ImGui::SameLine(0.0f, innerSpacing);
-	ImGui::PushButtonRepeat(true);
+	// |----row---------------------|
+	// |----selectable-------|
+	// ┌─────────────────────┐─────────┐
+	// │ name  value [<] [>] │ tooltip │
+	// │ separator           │         │
+	// └─────────────────────┘─────────┘
+	ImGui::Spacing();
+	ImGui::PushFont(regularFont, uiSettingTitleFontSize());
+	ImGui::AlignTextToFramePadding();
+	ImGui::TextUnformatted(name); // Render 'name'
+
+	float buttonsAndSpacingWidth =
+		ImGui::GetStyle().ItemSpacing.x * 4 // 4 spacings: _value_[<]_[>]_
+		+ ImGui::GetFrameHeight() * 2; // 2 frames: [<] [>]
+
+	// 'value' uses slightly larger font size than other items in 'selectable'
+	ImGui::PushFont(settingsValueFont, uiLargeFontSize());
+	std::string valueText = strprintf(format, option.get());
+	float helpOffset = gui_SelectableWidth() + ImGui::GetStyle().ItemSpacing.x * 2; // 2 spacings: _|_tooltip
+	float valueOffset = helpOffset - ImGui::CalcTextSize(valueText.c_str()).x - buttonsAndSpacingWidth;
+	ImGui::SameLine(valueOffset);
+	ImGui::AlignTextToFramePadding();
+	ImGui::TextUnformatted(valueText.c_str()); // Render 'value'
+	ImGui::PopFont();
+
 	bool valueChanged = false;
 	{
 		DisabledScope scope(option.isReadOnly());
-
-		if (ImGui::ArrowButton((id + "left").c_str(), ImGuiDir_Left)) { option.set(std::max(min, option - 1)); valueChanged = true; }
-		ImGui::SameLine(0.0f, innerSpacing);
-		if (ImGui::ArrowButton((id + "right").c_str(), ImGuiDir_Right)) { option.set(std::min(max, option + 1)); valueChanged = true; }
+		ImGui::PushButtonRepeat(true);
+		ImGui::SameLine();
+		if (ImGui::ArrowButton("leftButton", ImGuiDir_Left))
+		{
+			option.set(std::max(min, option - 1));
+			valueChanged = true;
+		}
+		ImGui::SameLine();
+		if (ImGui::ArrowButton("rightButton", ImGuiDir_Right))
+		{
+			option.set(std::min(max, option + 1));
+			valueChanged = true;
+		}
+		ImGui::PopButtonRepeat();
 	}
-	ImGui::PopButtonRepeat();
-	ImGui::SameLine(0.0f, innerSpacing);
-	ImGui::Text("%s", name);
+
 	if (help != nullptr)
 	{
-		ImGui::SameLine();
-		ShowHelpMarker(help);
+		ImGui::SameLine(helpOffset);
+		renderRowTooltip(help, ImGui::GetFrameHeight());
 	}
+
+	ImGui::Spacing();
+	renderRowSeparator();
+	ImGui::PopFont();
 	return valueChanged;
 }
-
-template<typename T>
-bool OptionRadioButton(const char *name, config::Option<T>& option, T value, const char *help)
-{
-	bool pressed;
-	{
-		DisabledScope scope(option.isReadOnly());
-
-		int v = (int)option;
-		pressed = ImGui::RadioButton(name, &v, (int)value);
-		if (pressed)
-			option.set((T)v);
-	}
-	if (help != nullptr)
-	{
-		ImGui::SameLine();
-		ShowHelpMarker(help);
-	}
-	return pressed;
-}
-template bool OptionRadioButton<bool>(const char *name, config::Option<bool>& option, bool value, const char *help);
-template bool OptionRadioButton<int>(const char *name, config::Option<int>& option, int value, const char *help);
 
 /// Render contents of a selectable option row
 /// @param renderValue function which renders the value right-justified in the given rect
@@ -491,9 +516,10 @@ bool renderSelectable(const char* name, const char* help, bool selected, std::fu
 	const float selectableHeight = gui_RowHeight();
 	const float selectableWidth = gui_SelectableWidth();
 
-	ImGui::PushFont(regularFont, uiScaled(21.0f));
+	ImGui::PushFont(regularFont, uiSettingTitleFontSize());
 	ImGui::PushStyleVarY(ImGuiStyleVar_SelectableTextAlign, 0.5f);
 	// Render 'name' (in entire 'selectable' box)
+	ImGui::AlignTextToFramePadding();
 	bool pressed = ImGui::Selectable(name, selected, ImGuiSelectableFlags_None, ImVec2(selectableWidth, selectableHeight));
 	ImGui::PopStyleVar();
 	ImGui::PopFont();
@@ -502,7 +528,7 @@ bool renderSelectable(const char* name, const char* help, bool selected, std::fu
 	if (help != nullptr)
 	{
 		ImGui::SameLine();
-		renderRowTooltip(help, selectableWidth, selectableHeight);
+		renderRowTooltip(help, selectableHeight);
 	}
 
 	renderValue(ImRect(initialScreenPos, ImVec2(finalScreenPos.x + selectableWidth, finalScreenPos.y)));
@@ -517,12 +543,10 @@ bool renderSelectable(const char* name, const char* help, bool selected, std::fu
 	return pressed;
 }
 
-bool ComboBoxRow::BeginCombo(const char* name, const char* value, ImGuiComboFlags flags, const char* help)
+bool ComboBoxRow::BeginCombo(const char* name, const char* value, const char* help)
 {
-	verify(flags == ImGuiComboFlags_None);
-
 	std::function<void(ImRect)> renderValue = [value](ImRect rect) {
-		ImGui::PushFont(settingsValueFont, uiScaled(24.0f));
+		ImGui::PushFont(settingsValueFont, uiLargeFontSize());
 		ImVec2 valueSize = ImGui::CalcTextSize(value);
 		ImVec2 valuePos(
 			rect.Max.x - valueSize.x,
@@ -546,18 +570,97 @@ void ComboBoxRow::EndCombo()
 	ImGui::EndPopup();
 }
 
-bool ComboBoxRow::Selectable(const char* label, bool* selected)
+bool ComboBoxRow::Selectable(const char* label, bool* selected, const ImVec2& size)
 {
-	ImGui::PushFont(settingsTitleFont, uiLargeFontSize());
-	bool pressed = ImGui::Selectable(label, selected);
+	ImGui::PushFont(settingsValueFont, uiLargeFontSize());
+	ImGui::PushStyleVarY(ImGuiStyleVar_SelectableTextAlign, 0.5f);
+	bool pressed = ImGui::Selectable(label, selected, ImGuiSelectableFlags_None, size);
+	ImGui::PopStyleVar();
 	ImGui::PopFont();
 	return pressed;
 }
 
-bool ComboBoxRow::Selectable(const char* label, bool selected)
+bool ComboBoxRow::Selectable(const char* label, bool selected, const ImVec2& size)
 {
-	return Selectable(label, &selected);
+	return Selectable(label, &selected, size);
 }
+
+const char* ComboBox2Col::Preview(int selected, std::initializer_list<const char*> values)
+{
+	auto index = static_cast<size_t>(selected);
+	return index < values.size() ? values.begin()[index] : "";
+}
+
+bool ComboBox2Col::BeginCombo(const char *name, const char *value, const char *help)
+{
+	if (ComboBoxRow::BeginCombo(name, value, help))
+	{
+		if (ImGui::BeginTable("table", 2))
+		{
+			// Selectables generally use a larger render box than layout box. i.e. they intentionally overflow the bounds by a certain amount.
+			// We avoid this overflowing effect on the vertical axis, and ensure there are neither gaps nor overlaps between rows,
+			// by using 0 vertical CellPadding, then 0 vertical ItemSpacing on the Selectable
+			ImGui::PushStyleVarY(ImGuiStyleVar_CellPadding, 0);
+			return true;
+		}
+
+		ComboBoxRow::EndCombo();
+	}
+
+    return false;
+}
+
+void ComboBox2Col::EndCombo()
+{
+	ImGui::PopStyleVar(); // ImGuiStyleVar_CellPadding
+	ImGui::EndTable();
+	ComboBoxRow::EndCombo();
+}
+
+template<typename T>
+bool ComboBox2Col::Selectable(const char *label, T *v, T v_button, const char *help)
+{
+	ImguiID id(label);
+
+	ImGui::TableNextColumn();
+	ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, 0.0f);
+	bool selected = *v == v_button;
+	bool pressed = ComboBoxRow::Selectable(label, selected, ImVec2(0, gui_RowHeight()));
+	ImGui::PopStyleVar();
+	if (selected)
+	{
+		ImGui::SetItemDefaultFocus();
+	}
+	if (pressed)
+	{
+		*v = v_button;
+	}
+
+	ImGui::TableNextColumn();
+	if (help != nullptr)
+	{
+		renderRowTooltip(help, gui_RowHeight());
+	}
+
+    return pressed;
+}
+
+// Explicit template instantiations
+template bool ComboBox2Col::Selectable<int>(const char *label, int *v, int v_button, const char *help);
+template bool ComboBox2Col::Selectable<bool>(const char *label, bool *v, bool v_button, const char *help);
+
+template<typename T, bool PerGameOption>
+bool ComboBox2Col::Selectable(const char *label, config::Option<T, PerGameOption>& option, T value, const char *help)
+{
+	DisabledScope scope(option.isReadOnly());
+	return Selectable(label, &option.get(), value, help);
+}
+
+// Explicit template instantiations
+template bool ComboBox2Col::Selectable<int, true>(const char *label, config::Option<int, true>& option, int value, const char *help);
+template bool ComboBox2Col::Selectable<int, false>(const char *label, config::Option<int, false>& option, int value, const char *help);
+template bool ComboBox2Col::Selectable<bool, true>(const char *label, config::Option<bool, true>& option, bool value, const char *help);
+template bool ComboBox2Col::Selectable<bool, false>(const char *label, config::Option<bool, false>& option, bool value, const char *help);
 
 template<bool PerGameOption>
 void OptionComboBox(const char *name, config::Option<int, PerGameOption>& option, const char *values[], int count,
@@ -567,7 +670,7 @@ void OptionComboBox(const char *name, config::Option<int, PerGameOption>& option
 		DisabledScope scope(option.isReadOnly());
 
 		const char *value = option >= 0 && option < count ? values[option] : "?";
-		if (ComboBoxRow::BeginCombo(name, value, ImGuiComboFlags_None, help))
+		if (ComboBoxRow::BeginCombo(name, value, help))
 		{
 			for (int i = 0; i < count; i++)
 			{

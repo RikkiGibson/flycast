@@ -253,7 +253,7 @@ void gui_settings_general()
 		const char *value = config::Cable == 0 ? cable[0]
 				: config::Cable > 0 && config::Cable <= (int)std::size(cable) ? cable[config::Cable - 1]
 				: "?";
-		if (ComboBoxRow::BeginCombo(T("Cable"), value, ImGuiComboFlags_None, T("Video connection type")))
+		if (ComboBoxRow::BeginCombo(T("Cable"), value, T("Video connection type")))
 		{
 			for (int i = 0; i < IM_ARRAYSIZE(cable); i++)
 			{
@@ -523,6 +523,10 @@ static void applyDarkTheme()
 
 	// Apply original Flycast styling to match exactly how it was
 	ImGuiStyle& style = ImGui::GetStyle();
+
+	// Use opaque background for popups for improved visibility
+	style.Colors[ImGuiCol_PopupBg].w = 1.00f;
+
 	style.TabRounding = 5.0f;
 	style.FrameRounding = 3.0f;
 	style.ItemSpacing = ImVec2(8, 8);		// from 8,4

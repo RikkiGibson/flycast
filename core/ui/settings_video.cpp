@@ -82,57 +82,56 @@ void gui_settings_video()
     float innerSpacing = ImGui::GetStyle().ItemInnerSpacing.x;
 	if (apiCount > 1)
 	{
-		header(T("Graphics API"));
+		const char* preview = ComboBox2Col::Preview(renderApi,
 		{
-			ImGui::Columns(apiCount, "renderApi", false);
+			"OpenGL",
+#ifdef __APPLE__
+			"Vulkan (Metal)",
+#else
+			"Vulkan",
+#endif
+			"DirectX 9",
+			"DirectX 11",
+		});
+		if (ComboBox2Col::BeginCombo(T("Graphics API"), preview))
+		{
 #ifdef USE_OPENGL
-			ImGui::RadioButton("OpenGL", &renderApi, OpenGL);
-			ImGui::NextColumn();
+			ComboBox2Col::Selectable<int>("OpenGL", &renderApi, OpenGL);
 #endif
 #ifdef USE_VULKAN
 #ifdef __APPLE__
-			ImGui::RadioButton("Vulkan (Metal)", &renderApi, Vulkan);
-			ImGui::SameLine(0, innerSpacing);
-			ShowHelpMarker(T("MoltenVK: An implementation of Vulkan that runs on Apple's Metal graphics framework"));
+			ComboBox2Col::Selectable<int>("Vulkan (Metal)", &renderApi, Vulkan, T("MoltenVK: An implementation of Vulkan that runs on Apple's Metal graphics framework"));
 #else
-			ImGui::RadioButton("Vulkan", &renderApi, Vulkan);
+			ComboBox2Col::Selectable<int>("Vulkan", &renderApi, Vulkan);
 #endif // __APPLE__
-			ImGui::NextColumn();
 #endif
 #ifdef USE_DX9
 			{
 				DisabledScope _(settings.platform.isNaomi2());
-				ImGui::RadioButton("DirectX 9", &renderApi, DirectX9);
-				ImGui::NextColumn();
+				ComboBox2Col::Selectable<int>("DirectX 9", &renderApi, DirectX9);
 			}
 #endif
 #ifdef USE_DX11
-			ImGui::RadioButton("DirectX 11", &renderApi, DirectX11);
-			ImGui::NextColumn();
+			ComboBox2Col::Selectable<int>("DirectX 11", &renderApi, DirectX11);
 #endif
-			ImGui::Columns(1, nullptr, false);
+			ComboBox2Col::EndCombo();
     	}
     }
-    header(T("Transparent Sorting"));
+
+	const bool has_per_pixel = GraphicsContext::Instance()->hasPerPixel();
+	int renderer = perPixel ? 2 : config::PerStripSorting ? 1 : 0;
+	const char* preview = ComboBox2Col::Preview(renderer, { T("Per Triangle"), T("Per Strip"), T("Per Pixel") });
+    if (ComboBox2Col::BeginCombo(T("Transparent Sorting"), preview))
     {
-		const bool has_per_pixel = GraphicsContext::Instance()->hasPerPixel();
-    	int renderer = perPixel ? 2 : config::PerStripSorting ? 1 : 0;
-    	ImGui::Columns(has_per_pixel ? 3 : 2, "renderers", false);
-    	ImGui::RadioButton(T("Per Triangle"), &renderer, 0);
-        ImGui::SameLine();
-        ShowHelpMarker(T("Sort transparent polygons per triangle. Fast but may produce graphical glitches"));
-    	ImGui::NextColumn();
-    	ImGui::RadioButton(T("Per Strip"), &renderer, 1);
-        ImGui::SameLine();
-        ShowHelpMarker(T("Sort transparent polygons per strip. Faster but may produce graphical glitches"));
+    	ComboBox2Col::Selectable(T("Per Triangle"), &renderer, 0, T("Sort transparent polygons per triangle. Fast but may produce graphical glitches"));
+    	ComboBox2Col::Selectable(T("Per Strip"), &renderer, 1, T("Sort transparent polygons per strip. Faster but may produce graphical glitches"));
+
         if (has_per_pixel)
         {
-        	ImGui::NextColumn();
-        	ImGui::RadioButton(T("Per Pixel"), &renderer, 2);
-        	ImGui::SameLine();
-        	ShowHelpMarker(T("Sort transparent polygons per pixel. Slower but accurate"));
+        	ComboBox2Col::Selectable(T("Per Pixel"), &renderer, 2, T("Sort transparent polygons per pixel. Slower but accurate"));
         }
-    	ImGui::Columns(1, nullptr, false);
+		ComboBox2Col::EndCombo();
+
     	switch (renderer)
     	{
     	case 0:
@@ -148,7 +147,6 @@ void gui_settings_video()
     		break;
     	}
     }
-	ImGui::Spacing();
 
     header(T("Rendering Options"));
     {
@@ -169,38 +167,19 @@ void gui_settings_video()
         	resLabels[i] += " (" + scalingsText[i] + ")";
         }
 
-        ImGui::PushItemWidth(ImGui::CalcItemWidth() - innerSpacing * 2.0f - ImGui::GetFrameHeight() * 2.0f);
-        if (ImGui::BeginCombo("##Resolution", resLabels[selected].c_str(), ImGuiComboFlags_NoArrowButton))
+		const char* renderResolutionHelp = T("Internal render resolution. Higher is better, but more demanding on the GPU. Values higher than your display resolution (but no more than double your display resolution) can be used for supersampling, which provides high-quality antialiasing without reducing sharpness.");
+        if (ComboBoxRow::BeginCombo(T("Internal Resolution"), resLabels[selected].c_str(), renderResolutionHelp))
         {
         	for (u32 i = 0; i < scalings.size(); i++)
             {
                 bool is_selected = vres[i] == config::RenderResolution;
-                if (ImGui::Selectable(resLabels[i].c_str(), is_selected))
+                if (ComboBoxRow::Selectable(resLabels[i].c_str(), is_selected))
                 	config::RenderResolution = vres[i];
                 if (is_selected)
                     ImGui::SetItemDefaultFocus();
             }
-            ImGui::EndCombo();
+            ComboBoxRow::EndCombo();
         }
-        ImGui::PopItemWidth();
-        ImGui::SameLine(0, innerSpacing);
-
-        if (ImGui::ArrowButton("##Decrease Res", ImGuiDir_Left))
-        {
-            if (selected > 0)
-            	config::RenderResolution = vres[selected - 1];
-        }
-        ImGui::SameLine(0, innerSpacing);
-        if (ImGui::ArrowButton("##Increase Res", ImGuiDir_Right))
-        {
-            if (selected < vres.size() - 1)
-            	config::RenderResolution = vres[selected + 1];
-        }
-        ImGui::SameLine(0, innerSpacing);
-
-        ImGui::Text("%s", T("Internal Resolution"));
-        ImGui::SameLine();
-        ShowHelpMarker(T("Internal render resolution. Higher is better, but more demanding on the GPU. Values higher than your display resolution (but no more than double your display resolution) can be used for supersampling, which provides high-quality antialiasing without reducing sharpness."));
 		OptionCheckbox(T("Integer Scaling"), config::IntegerScale, T("Scales the output by the maximum integer multiple allowed by the display resolution."));
 		OptionCheckbox(T("Linear Interpolation"), config::LinearInterpolation, T("Scales the output with linear interpolation. Will use nearest neighbor interpolation otherwise. Disable with integer scaling."));
 #ifndef TARGET_IPHONE
@@ -232,28 +211,25 @@ void gui_settings_video()
 			int selectedMode = configuredMode;
 			{
 				DisabledScope readOnlyScope(config::PreloadCustomTextures.isReadOnly());
-				ImGui::TextUnformatted(T("Custom Texture Preloading"));
-				ImGui::Columns(3, "custom_texture_preload_modes", false);
-				ImGui::RadioButton(T("Off"), &selectedMode,
-						static_cast<int>(config::CustomTexturePreloadMode::Off));
-				ImGui::SameLine();
-				ShowHelpMarker(T("Load custom textures as needed."));
-				ImGui::NextColumn();
-				ImGui::RadioButton(T("System Memory"), &selectedMode,
-						static_cast<int>(config::CustomTexturePreloadMode::SystemMemory));
-				ImGui::SameLine();
-				ShowHelpMarker(T("Preload custom textures at game start to prevent texture popping. Consumes system memory for the entire texture pack."));
-				ImGui::NextColumn();
+				const char* preview = ComboBox2Col::Preview(selectedMode, { T("Off"), T("System Memory"), T("Video Memory") });
+				if (ComboBox2Col::BeginCombo(T("Custom Texture Preloading"), preview))
 				{
-					DisabledScope videoMemoryScope(!gpuPreloadSupported);
-					ImGui::RadioButton(T("Video Memory"), &selectedMode,
-							static_cast<int>(config::CustomTexturePreloadMode::VideoMemory));
+					ComboBox2Col::Selectable(T("Off"), &selectedMode,
+							static_cast<int>(config::CustomTexturePreloadMode::Off),
+						T("Load custom textures as needed."));
+					ComboBox2Col::Selectable(T("System Memory"), &selectedMode,
+							static_cast<int>(config::CustomTexturePreloadMode::SystemMemory),
+						T("Preload custom textures at game start to prevent texture popping. Consumes system memory for the entire texture pack."));
+					{
+						DisabledScope videoMemoryScope(!gpuPreloadSupported);
+						ComboBox2Col::Selectable(T("Video Memory"), &selectedMode,
+							static_cast<int>(config::CustomTexturePreloadMode::VideoMemory),
+							gpuPreloadSupported
+								? T("Preload custom textures at game start to prevent texture popping. Consumes video memory for the entire texture pack.")
+								: T("Video-memory custom texture preloading is not supported by the current renderer."));
+					}
+					ComboBox2Col::EndCombo();
 				}
-				ImGui::SameLine();
-				ShowHelpMarker(gpuPreloadSupported
-						? T("Preload custom textures at game start to prevent texture popping. Consumes video memory for the entire texture pack.")
-						: T("Video-memory custom texture preloading is not supported by the current renderer."));
-				ImGui::Columns(1, nullptr, false);
 			}
 			if (selectedMode != configuredMode)
 				config::PreloadCustomTextures = selectedMode;
@@ -286,46 +262,26 @@ void gui_settings_video()
 
 		const std::array<int64_t, 4> bufSizes{ 512_MB, 1_GB, 2_GB, 4_GB };
 		const std::array<std::string, 4> bufSizesText{ T("512 MB"), T("1 GB"), T("2 GB"), T("4 GB") };
-        ImGui::PushItemWidth(ImGui::CalcItemWidth() - innerSpacing * 2.0f - ImGui::GetFrameHeight() * 2.0f);
 		u32 selected = 0;
 		for (; selected < bufSizes.size(); selected++)
 			if (bufSizes[selected] == config::PixelBufferSize)
 				break;
 		if (selected == bufSizes.size())
 			selected = 0;
-		if (ImGui::BeginCombo("##PixelBuffer", bufSizesText[selected].c_str(), ImGuiComboFlags_NoArrowButton))
+		if (ComboBoxRow::BeginCombo(T("Pixel Buffer Size"), bufSizesText[selected].c_str(), T("The size of the pixel buffer. May need to be increased when upscaling by a large factor.")))
 		{
 			for (u32 i = 0; i < bufSizes.size(); i++)
 			{
 				bool is_selected = i == selected;
-				if (ImGui::Selectable(bufSizesText[i].c_str(), is_selected))
+				if (ComboBoxRow::Selectable(bufSizesText[i].c_str(), is_selected))
 					config::PixelBufferSize = bufSizes[i];
 				if (is_selected) {
 					ImGui::SetItemDefaultFocus();
 					selected = i;
 				}
 			}
-			ImGui::EndCombo();
+			ComboBoxRow::EndCombo();
 		}
-        ImGui::PopItemWidth();
-		ImGui::SameLine(0, innerSpacing);
-
-		if (ImGui::ArrowButton("##Decrease BufSize", ImGuiDir_Left))
-		{
-			if (selected > 0)
-				config::PixelBufferSize = bufSizes[selected - 1];
-		}
-		ImGui::SameLine(0, innerSpacing);
-		if (ImGui::ArrowButton("##Increase BufSize", ImGuiDir_Right))
-		{
-			if (selected < bufSizes.size() - 1)
-				config::PixelBufferSize = bufSizes[selected + 1];
-		}
-		ImGui::SameLine(0, innerSpacing);
-
-        ImGui::Text("%s", T("Pixel Buffer Size"));
-        ImGui::SameLine();
-        ShowHelpMarker(T("The size of the pixel buffer. May need to be increased when upscaling by a large factor."));
 
         OptionSlider(T("Maximum Layers"), config::PerPixelLayers, 8, 128,
         		T("Maximum number of transparent layers. May need to be increased for some complex scenes. Decreasing it may improve performance."));
@@ -333,14 +289,14 @@ void gui_settings_video()
 	ImGui::Spacing();
     header(T("Performance"));
     {
-    	ImGui::Text("%s", T("Automatic Frame Skipping:"));
-    	ImGui::Columns(3, "autoskip", false);
-    	OptionRadioButton(T("Disabled"), config::AutoSkipFrame, 0, T("No frame skipping"));
-    	ImGui::NextColumn();
-    	OptionRadioButton(T("Normal"), config::AutoSkipFrame, 1, T("Skip a frame when the GPU and CPU are both running slow"));
-    	ImGui::NextColumn();
-    	OptionRadioButton(T("Maximum"), config::AutoSkipFrame, 2, T("Skip a frame when the GPU is running slow"));
-    	ImGui::Columns(1, nullptr, false);
+		const char* preview = ComboBox2Col::Preview(config::AutoSkipFrame, { T("Disabled"), T("Normal"), T("Maximum") });
+		if (ComboBox2Col::BeginCombo(T("Automatic Frame Skipping:"), preview))
+		{
+			ComboBox2Col::Selectable(T("Disabled"), config::AutoSkipFrame, 0, T("No frame skipping"));
+			ComboBox2Col::Selectable(T("Normal"), config::AutoSkipFrame, 1, T("Skip a frame when the GPU and CPU are both running slow"));
+			ComboBox2Col::Selectable(T("Maximum"), config::AutoSkipFrame, 2, T("Skip a frame when the GPU is running slow"));
+			ComboBox2Col::EndCombo();
+		}
 
     	OptionArrowButtons(T("Frame Skipping"), config::SkipFrame, 0, 6,
     			T("Number of frames to skip between two actually rendered frames"));
@@ -368,47 +324,28 @@ void gui_settings_video()
         		afSelected = i;
         }
 
-        ImGui::PushItemWidth(ImGui::CalcItemWidth() - innerSpacing * 2.0f - ImGui::GetFrameHeight() * 2.0f);
-        if (ImGui::BeginCombo("##Anisotropic Filtering", anisoText[afSelected].c_str(), ImGuiComboFlags_NoArrowButton))
+		const char* anisotropicFilteringHelp = T("Higher values make textures viewed at oblique angles look sharper, but are more demanding on the GPU. This option only has a visible impact on mipmapped textures.");
+        if (ComboBoxRow::BeginCombo(T("Anisotropic Filtering"), anisoText[afSelected].c_str(), anisotropicFilteringHelp))
         {
         	for (u32 i = 0; i < aniso.size(); i++)
             {
                 bool is_selected = aniso[i] == config::AnisotropicFiltering;
-                if (ImGui::Selectable(anisoText[i].c_str(), is_selected))
+                if (ComboBoxRow::Selectable(anisoText[i].c_str(), is_selected))
                 	config::AnisotropicFiltering = aniso[i];
                 if (is_selected)
                     ImGui::SetItemDefaultFocus();
             }
-            ImGui::EndCombo();
+            ComboBoxRow::EndCombo();
         }
-        ImGui::PopItemWidth();
-        ImGui::SameLine(0, innerSpacing);
 
-        if (ImGui::ArrowButton("##Decrease Anisotropic Filtering", ImGuiDir_Left))
-        {
-            if (afSelected > 0)
-            	config::AnisotropicFiltering = aniso[afSelected - 1];
-        }
-        ImGui::SameLine(0, innerSpacing);
-        if (ImGui::ArrowButton("##Increase Anisotropic Filtering", ImGuiDir_Right))
-        {
-            if (afSelected < aniso.size() - 1)
-            	config::AnisotropicFiltering = aniso[afSelected + 1];
-        }
-        ImGui::SameLine(0, innerSpacing);
-
-        ImGui::Text("%s", T("Anisotropic Filtering"));
-        ImGui::SameLine();
-        ShowHelpMarker(T("Higher values make textures viewed at oblique angles look sharper, but are more demanding on the GPU. This option only has a visible impact on mipmapped textures."));
-
-    	ImGui::Text("%s", T("Texture Filtering:"));
-    	ImGui::Columns(3, "textureFiltering", false);
-    	OptionRadioButton(T("Default"), config::TextureFiltering, 0, T("Use the game's default texture filtering"));
-    	ImGui::NextColumn();
-    	OptionRadioButton(T("Force Nearest-Neighbor"), config::TextureFiltering, 1, T("Force nearest-neighbor filtering for all textures. Crisper appearance, but may cause various rendering issues. This option usually does not affect performance."));
-    	ImGui::NextColumn();
-    	OptionRadioButton(T("Force Linear"), config::TextureFiltering, 2, T("Force linear filtering for all textures. Smoother appearance, but may cause various rendering issues. This option usually does not affect performance."));
-    	ImGui::Columns(1, nullptr, false);
+		const char* preview = ComboBox2Col::Preview(config::TextureFiltering, { T("Default"), T("Force Nearest-Neighbor"), T("Force Linear") });
+		if (ComboBox2Col::BeginCombo(T("Texture Filtering:"), preview))
+		{
+    		ComboBox2Col::Selectable(T("Default"), config::TextureFiltering, 0, T("Use the game's default texture filtering"));
+    		ComboBox2Col::Selectable(T("Force Nearest-Neighbor"), config::TextureFiltering, 1, T("Force nearest-neighbor filtering for all textures. Crisper appearance, but may cause various rendering issues. This option usually does not affect performance."));
+			ComboBox2Col::Selectable(T("Force Linear"), config::TextureFiltering, 2, T("Force linear filtering for all textures. Smoother appearance, but may cause various rendering issues. This option usually does not affect performance."));
+			ComboBox2Col::EndCombo();
+		}
 
     	OptionCheckbox(T("Show FPS Counter"), config::ShowFPS, T("Show on-screen frame/sec counter"));
     }
