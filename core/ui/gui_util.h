@@ -94,10 +94,14 @@ static inline void centerNextWindow()
 	ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x / 2.f, ImGui::GetIO().DisplaySize.y / 2.f),
 			ImGuiCond_Always, ImVec2(0.5f, 0.5f));
 }
+
 class FolderList
 {
 public:
-	static void Header(const char* name, const char* help, bool& outAdd, bool& outRefresh);
+	static void HeaderAddRefresh(const char* name, const char* help, bool& outAdd, bool& outRefresh);
+	static void HeaderImportExport(const char* name, const char* help, bool useSafFilePicker, bool& outImport, bool& outExport);
+	static void Header(const char* name, const char* help);
+	static void Entry(const char* path, bool& outOpen);
 	static void Entry(const char* path, bool& outOpen, bool& outDelete);
 	static void End();
 };

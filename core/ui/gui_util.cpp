@@ -682,7 +682,7 @@ void OptionComboBox(const char *name, config::Option<int, PerGameOption>& option
 template void OptionComboBox<true>(const char *name, config::Option<int, true>& option, const char *values[], int count, const char *help);
 template void OptionComboBox<false>(const char *name, config::Option<int, false>& option, const char *values[], int count, const char *help);
 
-void FolderList::Header(const char* name, const char* help, bool& outAdd, bool& outRefresh)
+void FolderList::HeaderAddRefresh(const char* name, const char* help, bool& outAdd, bool& outRefresh)
 {
 	ImGui::PushID(name);
 	float selectableWidth = gui_SelectableWidth();
@@ -716,47 +716,146 @@ void FolderList::Header(const char* name, const char* help, bool& outAdd, bool& 
 		ImGui::SameLine(selectableWidth + ImGui::GetStyle().ItemSpacing.x * 2);
 		renderRowTooltip(help, ImGui::GetFrameHeight());
 	}
-
-	ImGui::Spacing();
-	// TODO2: gui_SelectableWidth is *still* buggy with indentation
-	// ImGui::Indent();
 }
 
-void FolderList::Entry(const char *path, bool &outOpen, bool &outDelete)
+void FolderList::HeaderImportExport(const char* name, const char* help, bool useSafFilePicker, bool& outImport, bool& outExport)
 {
+	ImGui::PushID(name);
 	float selectableWidth = gui_SelectableWidth();
 
-	ImGui::PushFont(regularFont, uiLargeFontSize());
-	float buttonsWidth = ImGui::CalcTextSize(ICON_FA_FOLDER_OPEN).x
-		+ ImGui::CalcTextSize(ICON_FA_TRASH_CAN).x
-		+ ImGui::GetStyle().FramePadding.x * 4;
+	ImGui::PushFont(regularFont, uiSettingTitleFontSize());
+	ImGui::Spacing();
+	ImGui::AlignTextToFramePadding();
+	ImGui::TextUnformatted(name);
+	ImGui::PopFont();
 
-	float textMaxWidth = selectableWidth - buttonsWidth;
+	{
+		DisabledScope _(!useSafFilePicker);
+		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ScaledVec2(6.0f, 4.0f));
+		const char* labelImport = i18n::translateCtx("action", "Import");
+		const char* labelExport = i18n::translateCtx("action", "Export");
+		float buttonsWidth = ImGui::CalcTextSize(labelImport).x
+			+ ImGui::CalcTextSize(labelExport).x
+			+ ImGui::GetStyle().FramePadding.x * 4;
+
+		ImGui::SameLine(selectableWidth - buttonsWidth);
+		outImport = ImGui::Button(labelImport);
+
+		ImGui::SameLine();
+		outExport = ImGui::Button(labelExport);
+		ImGui::PopStyleVar();
+	}
+
+	if (help != nullptr)
+	{
+		ImGui::SameLine(selectableWidth + ImGui::GetStyle().ItemSpacing.x * 2);
+		renderRowTooltip(help, ImGui::GetFrameHeight());
+	}
+}
+
+void FolderList::Header(const char* name, const char* help)
+{
+	ImGui::PushID(name);
+	float selectableWidth = gui_SelectableWidth();
+
+	ImGui::PushFont(regularFont, uiSettingTitleFontSize());
+	ImGui::Spacing();
+	ImGui::AlignTextToFramePadding();
+	ImGui::TextUnformatted(name);
+	ImGui::PopFont();
+
+	if (help != nullptr)
+	{
+		ImGui::SameLine(selectableWidth + ImGui::GetStyle().ItemSpacing.x * 2);
+		renderRowTooltip(help, ImGui::GetFrameHeight());
+	}
+}
+
+void renderFolderListEntry(const char* path, bool* outOpen, bool* outDelete)
+{
+	verify(outOpen != nullptr);
+	float selectableWidth = gui_SelectableWidth();
+
+	// A splitter allows us to draw the group widgets and get the overall size,
+	// then draw a background rectangle of that size underneath afterwards
+	ImDrawListSplitter splitter;
+	ImDrawList* drawList = ImGui::GetWindowDrawList();
+	splitter.Split(drawList, 2);
+	splitter.SetCurrentChannel(drawList, 1);
+
+	ImGui::PushFont(regularFont, uiLargeFontSize());
+	ImGui::BeginGroup();
+	ImGui::Dummy(ImVec2(0, 0)); // Top padding (via ItemSpacing)
+	float groupPaddingH = ImGui::GetFrameHeight() / 2;
+	ImGui::Indent(groupPaddingH); // Left padding
+
+	float buttonsWidth = ImGui::CalcTextSize(ICON_FA_FOLDER_OPEN).x
+		+ ImGui::GetStyle().FramePadding.x * 2
+		+ ImGui::GetStyle().ItemSpacing.x;
+	if (outDelete != nullptr)
+	{
+		buttonsWidth += ImGui::CalcTextSize(ICON_FA_TRASH_CAN).x
+			+ ImGui::GetStyle().FramePadding.x * 2
+			+ ImGui::GetStyle().ItemSpacing.x;
+	}
+
 	ImGui::PushFont(settingsTitleFont, uiNormalFontSize());
 	ImGui::AlignTextToFramePadding();
-	std::string pathEllipsis = middleEllipsis(std::string(path), textMaxWidth);
+	std::string pathEllipsis = middleEllipsis(std::string(path), selectableWidth - buttonsWidth - groupPaddingH);
 	ImGui::TextUnformatted(pathEllipsis.c_str());
 	ImGui::SetItemTooltip("%s", path);
 	ImGui::PopFont();
 
-	ImGui::SameLine(selectableWidth - buttonsWidth);
-	outOpen = ImGui::Button(ICON_FA_FOLDER_OPEN);
+	ImGui::SameLine();
+	*outOpen = ImGui::Button(ICON_FA_FOLDER_OPEN);
 	ImGui::PushFont(settingsTitleFont, uiNormalFontSize());
 	ImGui::SetItemTooltip("%s", T("Reveal in Finder"));
 	ImGui::PopFont();
 
-	ImGui::SameLine();
-	outDelete = ImGui::Button(ICON_FA_TRASH_CAN);
-	ImGui::PushFont(settingsTitleFont, uiNormalFontSize());
-	ImGui::SetItemTooltip("%s", T("Remove"));
-	ImGui::PopFont();
+	if (outDelete != nullptr)
+	{
+		ImGui::SameLine();
+		*outDelete = ImGui::Button(ICON_FA_TRASH_CAN);
+		ImGui::PushFont(settingsTitleFont, uiNormalFontSize());
+		ImGui::SetItemTooltip("%s", T("Remove"));
+		ImGui::PopFont();
+	}
+
+	ImGui::SameLine(0, 0);
+	ImGui::Dummy(ImVec2(groupPaddingH, 0)); // Right padding
+	ImGui::Dummy(ImVec2(0, 0)); // Bottom padding (via ItemSpacing)
+	ImGui::Unindent(groupPaddingH);
+	ImGui::EndGroup();
+
+	splitter.SetCurrentChannel(drawList, 0);
+	drawList->AddRectFilled(
+		ImGui::GetItemRectMin(),
+		ImGui::GetItemRectMax(),
+		ImGui::GetColorU32(ImGuiCol_FrameBg),
+		ImGui::GetItemRectSize().y / 2);
+	drawList->AddRect(
+		ImGui::GetItemRectMin(),
+		ImGui::GetItemRectMax(),
+		ImGui::GetColorU32(ImGuiCol_Border),
+		ImGui::GetItemRectSize().y / 2);
+	splitter.Merge(drawList);
 
 	ImGui::PopFont();
 }
 
+// TODO2: Open button should just handle the interaction internally.
+void FolderList::Entry(const char* path, bool& outOpen, bool& outDelete)
+{
+	renderFolderListEntry(path, &outOpen, &outDelete);
+}
+
+void FolderList::Entry(const char* path, bool& outOpen)
+{
+	renderFolderListEntry(path, &outOpen, nullptr);
+}
+
 void FolderList::End()
 {
-	// ImGui::Unindent(); // TODO2
 	ImGui::Spacing();
 	renderRowSeparator();
 	ImGui::PopID(); // name

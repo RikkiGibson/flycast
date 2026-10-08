@@ -180,7 +180,13 @@ void addContentPath(bool start)
 #endif
 }
 
-void gui_ManageFolders();
+void gui_RescanContent();
+void gui_ContentLocations();
+void gui_DataFolder();
+void gui_HomeFolder();
+#if defined(__ANDROID__)
+void gui_HomeFolderAndroid();
+#endif
 void gui_ManageFolders0();
 void gui_Appearance();
 void gui_Misc();
@@ -274,18 +280,38 @@ void gui_settings_general()
 		}
 	}
 
-	gui_ManageFolders();
-	gui_ManageFolders0();
+#if defined(TARGET_IPHONE)
+	gui_RescanContent();
+#else
+	gui_ContentLocations();
+#endif
+
+#if defined(__ANDROID__)
+	gui_HomeFolderAndroid();
+#elif defined(__linux__)
+	gui_DataFolder();
+#elif !defined(TARGET_IPHONE)
+	gui_HomeFolder();
+#endif
+
+	// gui_ManageFolders0();
 	gui_Appearance();
 	gui_Misc();
 	gui_Achievements();
 	gui_CustomPaths();
 }
 
-void gui_ManageFolders()
+void gui_RescanContent()
+{
+	ImguiStyleVar _(ImGuiStyleVar_FramePadding, ScaledVec2(24, 3));
+	if (ImGui::Button(T("Rescan Content")))
+		scanner.refresh();
+}
+
+void gui_ContentLocations()
 {
 	bool addPressed, refreshPressed;
-	FolderList::Header(T("Content Location"), T("The folders where your games are stored"), addPressed, refreshPressed);
+	FolderList::HeaderAddRefresh(T("Content Location"), T("The folders where your games are stored"), addPressed, refreshPressed);
 
 	addContentPath(addPressed);
 	if (refreshPressed)
@@ -324,6 +350,52 @@ void gui_ManageFolders()
 	FolderList::End();
 }
 
+void gui_DataFolder()
+{
+	FolderList::Header(T("Data Folder"), T("The folder containing BIOS files, as well as saved VMUs and states"));
+
+	bool openPressed;
+	FolderList::Entry(get_writable_data_path("").c_str(), openPressed);
+	FolderList::End();
+}
+
+void gui_HomeFolder()
+{
+	FolderList::Header(T("Home Folder"), T("The folder where Flycast saves configuration files and VMUs. BIOS files should be in a subfolder named \"data\""));
+
+	bool openPressed;
+	FolderList::Entry(get_writable_config_path("").c_str(), openPressed);
+	FolderList::End();
+}
+
+#if defined(__ANDROID__)
+void gui_HomeFolderAndroid()
+{
+	bool importPressed, exportPressed;
+	FolderList::HeaderImportExport(
+		T("Home Folder"),
+		T("The folder where Flycast saves configuration files and VMUs. BIOS files should be in a subfolder named \"data\""),
+		config::UseSafFilePicker,
+		importPressed,
+		exportPressed);
+
+	if (importPressed)
+	{
+		hostfs::importHomeDirectory();
+	}
+
+	if (exportPressed)
+	{
+		hostfs::exportHomeDirectory();
+	}
+
+	bool openPressed;
+	FolderList::Entry(get_writable_config_path("").c_str(), openPressed);
+	FolderList::End();
+}
+#endif
+
+// TODO2: delete original impl
 void gui_ManageFolders0()
 {
 #if !defined(TARGET_IPHONE)
