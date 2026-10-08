@@ -784,7 +784,10 @@ void renderFolderListEntry(const char* path, bool* outDelete)
 
 	ImGui::PushFont(regularFont, uiLargeFontSize());
 	ImGui::BeginGroup();
+	float groupPaddingV = uiScaled(4.0f);
+	ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, groupPaddingV);
 	ImGui::Dummy(ImVec2(0, 0)); // Top padding (via ItemSpacing)
+	ImGui::PopStyleVar();
 	float groupPaddingH = ImGui::GetFrameHeight() / 2;
 	ImGui::Indent(groupPaddingH); // Left padding
 
@@ -824,8 +827,10 @@ void renderFolderListEntry(const char* path, bool* outDelete)
 	}
 
 	ImGui::SameLine(0, 0);
+	ImGui::PushStyleVarY(ImGuiStyleVar_ItemSpacing, groupPaddingV);
 	ImGui::Dummy(ImVec2(groupPaddingH, 0)); // Right padding
 	ImGui::Dummy(ImVec2(0, 0)); // Bottom padding (via ItemSpacing)
+	ImGui::PopStyleVar();
 	ImGui::Unindent(groupPaddingH);
 	ImGui::EndGroup();
 
