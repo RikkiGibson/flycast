@@ -535,7 +535,7 @@ void os_UpdateInputState()
 
 int os_OpenFolder(const char* path)
 {
-	#if defined(USE_SDL)
+#if defined(USE_SDL)
 	// TODO2: this probably isn't going to work for all paths or on all desktop platforms
 	std::filesystem::path absolutePath = std::filesystem::absolute(path).lexically_normal();
 	std::string fileUri = std::string("file:///") + absolutePath.generic_string();
