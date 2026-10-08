@@ -101,8 +101,8 @@ public:
 	static void HeaderAddRefresh(const char* name, const char* help, bool& outAdd, bool& outRefresh);
 	static void HeaderImportExport(const char* name, const char* help, bool useSafFilePicker, bool& outImport, bool& outExport);
 	static void Header(const char* name, const char* help);
-	static void Entry(const char* path, bool& outOpen);
-	static void Entry(const char* path, bool& outOpen, bool& outDelete);
+	static void Entry(const char* path);
+	static void Entry(const char* path, bool& outDelete);
 	static void End();
 };
 

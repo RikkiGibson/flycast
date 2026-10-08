@@ -22,6 +22,8 @@ void os_RunInstance(int argc, const char *argv[]);
 void os_SetThreadName(const char *name);
 void os_notify(const char *msg, int durationMs = 2000, const char *details = nullptr);
 
+int os_OpenFolder(const char* path);
+
 #ifdef DREAMPOTATO_INTEGRATED_MODE
 //! Get the containing directory of the current '.app'/'AppImage' bundle, if applicable, or of the current executable
 std::string os_GetAppContainingDir();

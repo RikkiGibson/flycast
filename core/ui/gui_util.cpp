@@ -771,9 +771,8 @@ void FolderList::Header(const char* name, const char* help)
 	}
 }
 
-void renderFolderListEntry(const char* path, bool* outOpen, bool* outDelete)
+void renderFolderListEntry(const char* path, bool* outDelete)
 {
-	verify(outOpen != nullptr);
 	float selectableWidth = gui_SelectableWidth();
 
 	// A splitter allows us to draw the group widgets and get the overall size,
@@ -807,7 +806,10 @@ void renderFolderListEntry(const char* path, bool* outOpen, bool* outDelete)
 	ImGui::PopFont();
 
 	ImGui::SameLine();
-	*outOpen = ImGui::Button(ICON_FA_FOLDER_OPEN);
+	if (ImGui::Button(ICON_FA_FOLDER_OPEN))
+	{
+		os_OpenFolder(path); // TODO2: indicate error?
+	}
 	ImGui::PushFont(settingsTitleFont, uiNormalFontSize());
 	ImGui::SetItemTooltip("%s", T("Reveal in Finder"));
 	ImGui::PopFont();
@@ -844,14 +846,14 @@ void renderFolderListEntry(const char* path, bool* outOpen, bool* outDelete)
 }
 
 // TODO2: Open button should just handle the interaction internally.
-void FolderList::Entry(const char* path, bool& outOpen, bool& outDelete)
+void FolderList::Entry(const char* path, bool& outDelete)
 {
-	renderFolderListEntry(path, &outOpen, &outDelete);
+	renderFolderListEntry(path, &outDelete);
 }
 
-void FolderList::Entry(const char* path, bool& outOpen)
+void FolderList::Entry(const char* path)
 {
-	renderFolderListEntry(path, &outOpen, nullptr);
+	renderFolderListEntry(path, nullptr);
 }
 
 void FolderList::End()

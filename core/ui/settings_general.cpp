@@ -324,15 +324,8 @@ void gui_ContentLocations()
 	for (auto it = contentPaths.begin(); it != contentPaths.end(); ++it)
 	{
 		ImguiID id(it - contentPaths.begin());
-		bool openPressed, deletePressed;
-        FolderList::Entry(it->c_str(), openPressed, deletePressed);
-		if (openPressed)
-		{
-			// TODO2: cross-plat Open helper. SDL_OpenURL, something for Android, ...
-            char temp[512];
-            snprintf(temp, sizeof(temp), "open \"%s\"", it->c_str());
-            system(temp);
-		}
+		bool deletePressed;
+        FolderList::Entry(it->c_str(), deletePressed);
 
 		if (deletePressed)
 		{
@@ -353,18 +346,14 @@ void gui_ContentLocations()
 void gui_DataFolder()
 {
 	FolderList::Header(T("Data Folder"), T("The folder containing BIOS files, as well as saved VMUs and states"));
-
-	bool openPressed;
-	FolderList::Entry(get_writable_data_path("").c_str(), openPressed);
+	FolderList::Entry(get_writable_data_path("").c_str());
 	FolderList::End();
 }
 
 void gui_HomeFolder()
 {
 	FolderList::Header(T("Home Folder"), T("The folder where Flycast saves configuration files and VMUs. BIOS files should be in a subfolder named \"data\""));
-
-	bool openPressed;
-	FolderList::Entry(get_writable_config_path("").c_str(), openPressed);
+	FolderList::Entry(get_writable_config_path("").c_str());
 	FolderList::End();
 }
 
@@ -389,8 +378,7 @@ void gui_HomeFolderAndroid()
 		hostfs::exportHomeDirectory();
 	}
 
-	bool openPressed;
-	FolderList::Entry(get_writable_config_path("").c_str(), openPressed);
+	FolderList::Entry(get_writable_config_path("").c_str());
 	FolderList::End();
 }
 #endif

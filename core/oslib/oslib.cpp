@@ -533,6 +533,18 @@ void os_UpdateInputState()
 #endif
 }
 
+int os_OpenFolder(const char* path)
+{
+	#if defined(USE_SDL)
+	// TODO2: this probably isn't going to work for all paths or on all desktop platforms
+	std::filesystem::path absolutePath = std::filesystem::absolute(path).lexically_normal();
+	std::string fileUri = std::string("file:///") + absolutePath.generic_string();
+	return SDL_OpenURL(fileUri.c_str());
+#else
+	return -1; // TODO2 android etc...
+#endif
+}
+
 #ifdef USE_BREAKPAD
 
 #include "http_client.h"
