@@ -845,7 +845,6 @@ void renderFolderListEntry(const char* path, bool* outDelete)
 	ImGui::PopFont();
 }
 
-// TODO2: Open button should just handle the interaction internally.
 void FolderList::Entry(const char* path, bool& outDelete)
 {
 	renderFolderListEntry(path, &outDelete);
