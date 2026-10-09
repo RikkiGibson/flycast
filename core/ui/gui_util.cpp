@@ -718,8 +718,8 @@ void renderHeaderAddRefresh(const char* name, const char* help, bool enableButto
 		ImGui::SetItemTooltip("%s", T("Rescan Content"));
 		ImGui::PopFont();
 	}
-	ImGui::EndDisabled();
 	ImGui::PopFont();
+	ImGui::EndDisabled();
 
 	if (help != nullptr)
 	{
