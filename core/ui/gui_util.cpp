@@ -737,7 +737,6 @@ void FolderList::HeaderAddRefresh(const char* name, const char* help, bool& outA
 	renderHeaderAddRefresh(name, help, true, &outAdd, &outRefresh);
 }
 
-
 void FolderList::HeaderImportExport(const char* name, const char* help, bool useSafFilePicker, bool& outImport, bool& outExport)
 {
 	ImGui::PushID(name);
