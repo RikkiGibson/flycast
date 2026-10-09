@@ -96,7 +96,7 @@ static void managePathList(const char* label, const char *popupName, std::vector
     	return true;
     });
 #ifdef __ANDROID__
-    if (openPopup)
+    if (addPressed)
     {
 		bool supported = hostfs::addStorage(true, false, T(popupName), [](bool cancelled, std::string selection) {
 			if (!cancelled)

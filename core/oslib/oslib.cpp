@@ -46,6 +46,8 @@
 #include "input/dreampotato.h"
 #include "i18n.h"
 
+#include <filesystem>
+
 namespace hostfs
 {
 

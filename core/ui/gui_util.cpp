@@ -36,6 +36,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
 #include <future>
 #include <string>
 #include <vector>
@@ -1266,10 +1267,15 @@ std::string middleEllipsis(std::string s, float width)
 #else
 	const char* home = std::getenv("HOME");
 #endif
-
-	if (home != nullptr && s.rfind(home, 0) == 0)
+	if (home != nullptr && home[0] != '\0')
 	{
-		s.replace(0, strlen(home), "~");
+		std::filesystem::path homePath(home);
+		std::filesystem::path path(s);
+		auto [homeIt, it] = std::mismatch(homePath.begin(), homePath.end(), path.begin(), path.end());
+		if (homeIt == homePath.end())
+		{
+			s.replace(0, strlen(home), "~");
+		}
 	}
 
 	float tw = ImGui::CalcTextSize(s.c_str()).x;
