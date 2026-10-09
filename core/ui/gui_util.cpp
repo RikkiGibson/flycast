@@ -810,9 +810,13 @@ void renderFolderListEntry(const char* path, bool* outDelete)
 	float groupPaddingH = ImGui::GetFrameHeight() / 2;
 	ImGui::Indent(groupPaddingH); // Left padding
 
-	float buttonsWidth = ImGui::CalcTextSize(ICON_FA_FOLDER_OPEN).x
-		+ ImGui::GetStyle().FramePadding.x * 2
-		+ ImGui::GetStyle().ItemSpacing.x;
+	float buttonsWidth = 0;
+	if (os_OpenFolderSupported)
+	{
+		buttonsWidth += ImGui::CalcTextSize(ICON_FA_FOLDER_OPEN).x
+			+ ImGui::GetStyle().FramePadding.x * 2
+			+ ImGui::GetStyle().ItemSpacing.x;
+	}
 	if (outDelete != nullptr)
 	{
 		buttonsWidth += ImGui::CalcTextSize(ICON_FA_TRASH_CAN).x
@@ -827,14 +831,17 @@ void renderFolderListEntry(const char* path, bool* outDelete)
 	ImGui::SetItemTooltip("%s", path);
 	ImGui::PopFont();
 
-	ImGui::SameLine();
-	if (ImGui::Button(ICON_FA_FOLDER_OPEN))
+	if (os_OpenFolderSupported)
 	{
-		os_OpenFolder(path); // TODO2: indicate error?
+		ImGui::SameLine();
+		if (ImGui::Button(ICON_FA_FOLDER_OPEN))
+		{
+			os_OpenFolder(path);
+		}
+		ImGui::PushFont(settingsTitleFont, uiNormalFontSize());
+		ImGui::SetItemTooltip("%s", T("Reveal in Finder"));
+		ImGui::PopFont();
 	}
-	ImGui::PushFont(settingsTitleFont, uiNormalFontSize());
-	ImGui::SetItemTooltip("%s", T("Reveal in Finder"));
-	ImGui::PopFont();
 
 	if (outDelete != nullptr)
 	{
