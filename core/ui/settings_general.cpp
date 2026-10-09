@@ -156,7 +156,6 @@ void gui_HomeFolder();
 #if defined(__ANDROID__)
 void gui_HomeFolderAndroid();
 #endif
-void gui_ManageFolders0();
 void gui_Appearance();
 void gui_Misc();
 void gui_Achievements();
