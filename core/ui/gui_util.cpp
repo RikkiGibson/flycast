@@ -825,11 +825,20 @@ void renderFolderListEntry(const char* path, bool* outDelete)
 			+ ImGui::GetStyle().ItemSpacing.x;
 	}
 
+	float buttonHeight = ImGui::GetFrameHeight();
 	ImGui::PushFont(settingsTitleFont, uiNormalFontSize());
-	ImGui::AlignTextToFramePadding();
 	std::string pathEllipsis = middleEllipsis(std::string(path), selectableWidth - buttonsWidth - groupPaddingH);
-	ImGui::TextUnformatted(pathEllipsis.c_str());
+
+	float pathTextWidth = ImGui::CalcTextSize(pathEllipsis.c_str()).x;
+	ImVec2 beforePathPos = ImGui::GetCursorScreenPos();
+	ImGui::SetCursorScreenPos(beforePathPos - ImGui::GetStyle().FramePadding);
+	// This has 2 effects: makes the tooltip easier to hit, and gives the group the same height regardless of whether any visible buttons are present
+	ImGui::InvisibleButton("pathTooltip", ImVec2(pathTextWidth, buttonHeight) + ImGui::GetStyle().FramePadding * 2);
 	ImGui::SetItemTooltip("%s", path);
+
+	ImGui::SetCursorScreenPos(beforePathPos);
+	ImGui::AlignTextToFramePadding();
+	ImGui::TextUnformatted(pathEllipsis.c_str());
 	ImGui::PopFont();
 
 	if (os_OpenFolderSupported)
