@@ -37,36 +37,21 @@ static void managePathListCallback(std::string selection)
 
 static void manageSinglePath(const char* label, const char *popupName, config::Option<std::string, false>& pathOption, const char* helpText)
 {
-    ImVec2 size;
-    size.x = 0.0f;
-    size.y = ImGui::GetTextLineHeightWithSpacing() + ImGui::GetStyle().FramePadding.y * 2.f;
-    bool openPopup = false;
-    
-    ImVec2 childSize;
-    if (beginFrame(label, size, &childSize))
-    {
-        ImGui::AlignTextToFramePadding();
-        if (pathOption.get().empty()) {
-            ImguiStyleVar _(ImGuiStyleVar_FramePadding, ScaledVec2(24, 3));
-            std::string buttonLabel = T("Set") + std::string("##") + label;
-            openPopup = ImGui::Button(buttonLabel.c_str());
-        }
-        else
-        {
-            float w = childSize.x - ImGui::CalcTextSize(ICON_FA_TRASH_CAN).x - ImGui::GetStyle().FramePadding.x * 2
-                - ImGui::GetStyle().ItemSpacing.x;
-            std::string s = middleEllipsis(pathOption, w);
-            ImGui::Text("%s", s.c_str());
-            ImGui::SameLine(0, w - ImGui::CalcTextSize(s.c_str()).x + ImGui::GetStyle().ItemSpacing.x);
-            std::string buttonLabel = std::string(ICON_FA_TRASH_CAN "##") + label;
-            if (ImGui::Button(buttonLabel.c_str()))
-                pathOption.get().clear();
-        }
-        endFrame();
-    }
-    ImGui::SameLine();
-    ShowHelpMarker(helpText);
-    
+	bool hasValue = !pathOption.get().empty();
+	bool addPressed;
+	FolderList::HeaderAdd(label, helpText, !hasValue, addPressed);
+
+	if (hasValue)
+	{
+		bool deletePressed;
+		FolderList::Entry(pathOption.get().c_str(), deletePressed);
+		if (deletePressed)
+		{
+			pathOption.get().clear();
+		}
+	}
+	FolderList::End();
+
     static std::string *pCurrentPath;
     pCurrentPath = &pathOption.get();
     select_file_popup(popupName, [](bool cancelled, std::string selection) {
@@ -74,52 +59,36 @@ static void manageSinglePath(const char* label, const char *popupName, config::O
     		*pCurrentPath = selection;
     	return true;
     });
-    if (openPopup)
+    if (addPressed)
         ImGui::OpenPopup(T(popupName));
 }
 
 static void managePathList(const char* label, const char *popupName, std::vector<std::string>& paths, const char* helpText)
 {
-    ImguiID _(label);
-    ImVec2 size;
-    size.x = 0.0f;
-    size.y = (ImGui::GetTextLineHeightWithSpacing() + ImGui::GetStyle().FramePadding.y * 2.f)
-                * (paths.size() + 1);
+	bool addPressed;
+	FolderList::HeaderAdd(label, helpText, true, addPressed);
 
-    bool openPopup = false;
-    ImVec2 childSize;
-    if (beginFrame(label, size, &childSize))
-    {
-        ImGui::AlignTextToFramePadding();
-        int to_delete = -1;
-        for (u32 i = 0; i < paths.size(); i++)
-        {
-            ImguiID _(std::to_string(i).c_str());
-            float maxW = childSize.x - ImGui::CalcTextSize(ICON_FA_TRASH_CAN).x - ImGui::GetStyle().FramePadding.x * 2
-                         - ImGui::GetStyle().ItemSpacing.x;
-            std::string s = middleEllipsis(paths[i], maxW);
-            ImGui::Text("%s", s.c_str());
-            ImGui::SameLine(0, maxW - ImGui::CalcTextSize(s.c_str()).x + ImGui::GetStyle().ItemSpacing.x);
-            if (ImGui::Button(ICON_FA_TRASH_CAN))
-                to_delete = (int)i;
-        }
+	auto toDelete = paths.end();
+	for (auto it = paths.begin(); it != paths.end(); ++it)
+	{
+		ImguiID id(it - paths.begin());
+		bool deletePressed;
+		FolderList::Entry(it->c_str(), deletePressed);
 
-        ImguiStyleVar _(ImGuiStyleVar_FramePadding, ScaledVec2(24, 3));
-        std::string buttonLabel = T("Add") + std::string("##") + label;
-        openPopup = ImGui::Button(buttonLabel.c_str());
+		if (deletePressed)
+		{
+			toDelete = it;
+		}
+	}
+	FolderList::End();
 
-        endFrame();
-        if (to_delete >= 0)
-        {
-            paths.erase(paths.begin() + to_delete);
-            SaveSettings();
-        }
-    }
-    ImGui::SameLine();
-    ShowHelpMarker(helpText);
+	if (toDelete != paths.end())
+	{
+		paths.erase(toDelete);
+	}
 
     // Handle file selection popup (following the same pattern as addContentPath)
-    if (openPopup)
+    if (addPressed)
 	    g_currentPathList = &paths;
     select_file_popup(popupName, [](bool cancelled, std::string selection) {
     	if (!cancelled)
@@ -137,7 +106,7 @@ static void managePathList(const char* label, const char *popupName, std::vector
 			ImGui::OpenPopup(T(popupName));
     }
 #else
-    if (openPopup)
+    if (addPressed)
         ImGui::OpenPopup(T(popupName));
 #endif
 }
@@ -494,17 +463,14 @@ void gui_CustomPaths()
 {
 // Custom Paths section - hidden on Android and iOS
 #if !defined(TARGET_IPHONE)
-    ImGui::Spacing();
     header(T("Custom Paths"));
 
     managePathList(T("BIOS Folders"), T("Select a BIOS folder"), config::BiosPath.get(),
     		T("Folders containing BIOS files (e.g. dc_boot.bin or dc_bios.bin) and arcade BIOS"));
-    ImGui::Spacing();
 
 #if !defined(__ANDROID__)
     manageSinglePath(T("VMU Folder"), T("Select the VMU folder"), config::VMUPath,
     		T("Folder where VMU (.bin) saves are stored"));
-    ImGui::Spacing();
 
 #ifdef DREAMPOTATO_INTEGRATED_MODE
 	manageSinglePath("DreamPotato Path", T("Select the DreamPotato folder"), config::DreamPotatoFolderPath,
@@ -514,33 +480,26 @@ void gui_CustomPaths()
 
     managePathList(T("Savestate Folders"), T("Select a savestate folder"), config::SavestatePath.get(),
     		T("Folders for save states. First path is used for new states; all are searched when loading"));
-    ImGui::Spacing();
 
     manageSinglePath(T("Game Save Folder"), T("Select the game save folder"), config::SavePath,
     		T("Folder for game save data (e.g. arcade NVRAM)"));
-    ImGui::Spacing();
 #endif
 
     managePathList(T("Texture Pack Folders"), T("Select a texture pack folder"), config::TexturePath.get(),
     		T("Folders containing textures/<gameId> or <gameId> under a textures subfolder"));
-    ImGui::Spacing();
 
 #if !defined(__ANDROID__)
     manageSinglePath(T("Texture Dump Folder"), T("Select the texture dump folder"), config::TextureDumpPath,
     		T("Folder where texture dumps are saved. Game-specific subfolders will be created automatically"));
-    ImGui::Spacing();
     
     manageSinglePath(T("Box Art Folder"), T("Select the box art folder"), config::BoxartPath,
     		T("Folder containing box art images (png/jpg). If empty, Flycast will use the default Home Folder/boxart for downloads and generated art"));
-    ImGui::Spacing();
 
     managePathList(T("Controller Mapping Folders"), T("Select a controller mapping folder"), config::MappingsPath.get(),
     		T("Folders containing controller mapping files (.cfg). The emulator also looks in Home Folder/mappings. Per-game mappings are suffixed with _<gameId>.cfg"));
-    ImGui::Spacing();
 
     managePathList(T("Cheat Folders"), T("Select a cheat folder"), config::CheatPath.get(),
     		T("Folders containing cheat files (.cht/.txt) named with the game ID. Flycast will auto-load matching files if present"));
-    ImGui::Spacing();
 #endif  // !ANDROID
 #endif  // !IPHONE
 }

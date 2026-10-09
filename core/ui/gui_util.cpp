@@ -682,7 +682,7 @@ void OptionComboBox(const char *name, config::Option<int, PerGameOption>& option
 template void OptionComboBox<true>(const char *name, config::Option<int, true>& option, const char *values[], int count, const char *help);
 template void OptionComboBox<false>(const char *name, config::Option<int, false>& option, const char *values[], int count, const char *help);
 
-void FolderList::HeaderAddRefresh(const char* name, const char* help, bool& outAdd, bool& outRefresh)
+void renderHeaderAddRefresh(const char* name, const char* help, bool enableButtons, bool* outAdd, bool* outRefresh)
 {
 	ImGui::PushID(name);
 	float selectableWidth = gui_SelectableWidth();
@@ -695,20 +695,29 @@ void FolderList::HeaderAddRefresh(const char* name, const char* help, bool& outA
 
 	ImGui::PushFont(nullptr, uiLargeFontSize());
 	float buttonsWidth = ImGui::CalcTextSize(ICON_FA_FOLDER_PLUS).x
-		+ ImGui::CalcTextSize(ICON_FA_ARROWS_ROTATE).x
-		+ ImGui::GetStyle().FramePadding.x * 4;
+		+ ImGui::GetStyle().FramePadding.x * 2;
+	if (outRefresh != nullptr)
+	{
+		buttonsWidth += ImGui::CalcTextSize(ICON_FA_ARROWS_ROTATE).x
+			+ ImGui::GetStyle().FramePadding.x * 2;
+	}
 
+	ImGui::BeginDisabled(!enableButtons);
 	ImGui::SameLine(selectableWidth - buttonsWidth);
-	outAdd = ImGui::Button(ICON_FA_FOLDER_PLUS);
+	*outAdd = ImGui::Button(ICON_FA_FOLDER_PLUS);
 	ImGui::PushFont(settingsTitleFont, uiNormalFontSize());
 	ImGui::SetItemTooltip("%s", T("Add"));
 	ImGui::PopFont();
 
-	ImGui::SameLine();
-	outRefresh = ImGui::Button(ICON_FA_ARROWS_ROTATE);
-	ImGui::PushFont(settingsTitleFont, uiNormalFontSize());
-	ImGui::SetItemTooltip("%s", T("Rescan Content"));
-	ImGui::PopFont();
+	if (outRefresh != nullptr)
+	{
+		ImGui::SameLine();
+		*outRefresh = ImGui::Button(ICON_FA_ARROWS_ROTATE);
+		ImGui::PushFont(settingsTitleFont, uiNormalFontSize());
+		ImGui::SetItemTooltip("%s", T("Rescan Content"));
+		ImGui::PopFont();
+	}
+	ImGui::EndDisabled();
 	ImGui::PopFont();
 
 	if (help != nullptr)
@@ -717,6 +726,17 @@ void FolderList::HeaderAddRefresh(const char* name, const char* help, bool& outA
 		renderRowTooltip(help, ImGui::GetFrameHeight());
 	}
 }
+
+void FolderList::HeaderAdd(const char* name, const char* help, bool enableAdd, bool& outAdd)
+{
+	renderHeaderAddRefresh(name, help, enableAdd, &outAdd, nullptr);
+}
+
+void FolderList::HeaderAddRefresh(const char* name, const char* help, bool& outAdd, bool& outRefresh)
+{
+	renderHeaderAddRefresh(name, help, true, &outAdd, &outRefresh);
+}
+
 
 void FolderList::HeaderImportExport(const char* name, const char* help, bool useSafFilePicker, bool& outImport, bool& outExport)
 {

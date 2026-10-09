@@ -99,6 +99,7 @@ class FolderList
 {
 public:
 	static void HeaderAddRefresh(const char* name, const char* help, bool& outAdd, bool& outRefresh);
+	static void HeaderAdd(const char* name, const char* help, bool enableAdd, bool& outAdd);
 	static void HeaderImportExport(const char* name, const char* help, bool useSafFilePicker, bool& outImport, bool& outExport);
 	static void Header(const char* name, const char* help);
 	static void Entry(const char* path);
