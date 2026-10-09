@@ -849,7 +849,7 @@ void renderFolderListEntry(const char* path, bool* outDelete)
 			os_OpenFolder(path);
 		}
 		ImGui::PushFont(settingsTitleFont, uiNormalFontSize());
-		ImGui::SetItemTooltip("%s", T("Reveal in Finder"));
+		ImGui::SetItemTooltip("%s", T("Open Folder"));
 		ImGui::PopFont();
 	}
 
