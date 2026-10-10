@@ -538,12 +538,17 @@ void os_UpdateInputState()
 
 int os_OpenFolder(const char* path)
 {
-#if defined(USE_SDL)
-	std::filesystem::path absolutePath = std::filesystem::absolute(path).lexically_normal();
-	std::string fileUri = std::string("file:///") + http::urlEncodePath(absolutePath.generic_string());
-	return SDL_OpenURL(fileUri.c_str());
-#else
+#if !defined(USE_SDL)
 	return -1;
+#else
+	std::filesystem::path absolutePath = std::filesystem::absolute(path).lexically_normal();
+	std::string encodedPath = http::urlEncodePath(absolutePath.generic_string());
+#ifdef _WIN32
+ 	std::string fileUri = encodedPath.rfind("//", 0) == 0 ? "file:" + encodedPath : "file:///" + encodedPath;
+#else
+ 	std::string fileUri = "file://" + encodedPath;
+#endif
+	return SDL_OpenURL(fileUri.c_str());
 #endif
 }
 

@@ -69,7 +69,7 @@ static inline std::string urlEncode(const std::string& value, std::string_view a
 
 	for (char c : value)
 	{
-		if (std::isalnum(c, std::locale::classic()) || c == '-' || c == '_' || c == '.' || c == '~'
+		if (std::isalnum(static_cast<u8>(c)) || c == '-' || c == '_' || c == '.' || c == '~'
 			|| additionalSafeCharacters.find(c) != std::string_view::npos)
 		{
 			// Keep alphanumeric and other accepted characters intact
