@@ -700,7 +700,8 @@ void renderHeaderAddRefresh(const char* name, const char* help, bool enableButto
 	if (outRefresh != nullptr)
 	{
 		buttonsWidth += ImGui::CalcTextSize(ICON_FA_ARROWS_ROTATE).x
-			+ ImGui::GetStyle().FramePadding.x * 2;
+			+ ImGui::GetStyle().FramePadding.x * 2
+			+ ImGui::GetStyle().ItemSpacing.x;
 	}
 
 	ImGui::BeginDisabled(!enableButtons);
