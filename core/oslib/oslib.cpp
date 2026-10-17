@@ -543,8 +543,12 @@ int os_OpenFolder(const char* path)
 #else
 	std::filesystem::path absolutePath = std::filesystem::absolute(path).lexically_normal();
 	std::string encodedPath = http::urlEncodePath(absolutePath.generic_string());
+	// A file url generally has the form 'file://<host>/<path>'.
+	// Since our file is on localhost, we can leave '<host>' blank.
+	// The absolute path on Windows does not start with '/', so an extra '/' is required in its prefix.
+	// We are also deliberately not handling Windows UNC paths here. The UI doesn't allow selecting them and it doesn't look like SDL_OpenURL works with them.
 #ifdef _WIN32
- 	std::string fileUri = encodedPath.rfind("//", 0) == 0 ? "file:" + encodedPath : "file:///" + encodedPath;
+ 	std::string fileUri = "file:///" + encodedPath;
 #else
  	std::string fileUri = "file://" + encodedPath;
 #endif

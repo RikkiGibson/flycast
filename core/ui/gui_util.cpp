@@ -683,7 +683,7 @@ void OptionComboBox(const char *name, config::Option<int, PerGameOption>& option
 template void OptionComboBox<true>(const char *name, config::Option<int, true>& option, const char *values[], int count, const char *help);
 template void OptionComboBox<false>(const char *name, config::Option<int, false>& option, const char *values[], int count, const char *help);
 
-void renderHeaderAddRefresh(const char* name, const char* help, bool enableButtons, bool* outAdd, bool* outRefresh)
+static void renderHeaderAddRefresh(const char* name, const char* help, bool enableButtons, bool* outAdd, bool* outRefresh)
 {
 	ImGui::PushID(name);
 	float selectableWidth = gui_SelectableWidth();
@@ -792,7 +792,7 @@ void FolderList::Header(const char* name, const char* help)
 	}
 }
 
-void renderFolderListEntry(const char* path, bool* outDelete)
+static void renderFolderListEntry(const char* path, bool* outDelete)
 {
 	float selectableWidth = gui_SelectableWidth();
 
